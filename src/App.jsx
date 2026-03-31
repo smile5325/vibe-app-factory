@@ -326,11 +326,64 @@ export default function VibeAppFactory() {
   const [allOutput,      setAllOutput]      = useState([]);
   const [error,          setError]          = useState("");
   const [activeTab,      setActiveTab]      = useState(1);
+
+  // ✏️ AI 주제 생성 상태
+  const [generatedTopics,  setGeneratedTopics]  = useState([]);
+  const [isGenerating,     setIsGenerating]     = useState(false);
+  const [selectedTopicIdx, setSelectedTopicIdx] = useState(null);
+
   const outputRef = useRef(null);
 
   useEffect(() => {
     if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight;
   }, [stepOutput]);
+
+  // ✏️ 카테고리/타겟 변경 시 칩 초기화
+  useEffect(() => {
+    setGeneratedTopics([]);
+    setSelectedTopicIdx(null);
+  }, [category, target]);
+
+  // ✏️ AI 주제 생성 함수
+  async function generateTopics() {
+    const cat = CATEGORIES.find((c) => c.id === category) || CATEGORIES[1];
+    setIsGenerating(true);
+    setGeneratedTopics([]);
+    setSelectedTopicIdx(null);
+    try {
+      const res = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 400,
+          messages: [{
+            role: "user",
+            content: `당신은 유튜브 ${cat.label} 채널 전문 콘텐츠 기획자입니다.\n타겟 독자: ${target}\n\n위 카테고리와 타겟에 최적화된 유튜브 영상 주제 6개를 생성하세요.\n\n규칙:\n- 각 주제는 15자 이내의 짧고 임팩트 있는 한국어 문장\n- 클릭하고 싶은 호기심/공감을 자극하는 제목 형태\n- 트렌디하고 실용적인 주제\n- 중복 없이 다양한 각도로\n\n반드시 아래 JSON 형식만 출력하세요. 다른 텍스트 일절 금지:\n["주제1", "주제2", "주제3", "주제4", "주제5", "주제6"]`
+          }]
+        }),
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text ?? "[]";
+      const clean = text.replace(/```json|```/g, "").trim();
+      setGeneratedTopics(JSON.parse(clean));
+    } catch (e) {
+      console.error("주제 생성 실패:", e);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  // ✏️ 칩 선택 핸들러
+  function handleSelectTopic(idx, label) {
+    if (selectedTopicIdx === idx) {
+      setSelectedTopicIdx(null);
+      setTopic("");
+    } else {
+      setSelectedTopicIdx(idx);
+      setTopic(label);
+    }
+  }
 
   const canStart = mode === "url" ? url.trim() : topic.trim();
 
@@ -499,14 +552,57 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
                 ))}
               </div>
 
-              {/* 입력 */}
+              {/* ✏️ 입력 — AI 주제 생성 포함 */}
               <div style={{ fontSize: 10, color: "#6b6880", marginBottom: 7, letterSpacing: 1.5 }}>
                 {mode === "url" ? "유튜브 URL" : "주제 / 키워드"}
               </div>
+
+              {/* AI 주제 생성 버튼 (topic 모드에서만 표시) */}
+              {mode === "topic" && (
+                <div style={{ marginBottom: 10 }}>
+                  <button
+                    onClick={generateTopics}
+                    disabled={isGenerating}
+                    style={{
+                      padding: "8px 18px", borderRadius: 8, fontSize: 12, cursor: isGenerating ? "not-allowed" : "pointer",
+                      border: "1px solid rgba(120,80,255,0.5)", background: "rgba(120,80,255,0.12)",
+                      color: "#c4a8ff", fontWeight: 600, opacity: isGenerating ? 0.6 : 1, transition: "all 0.2s",
+                    }}
+                  >
+                    {isGenerating ? "⏳ 생성 중..." : "🔄 AI 주제 생성"}
+                  </button>
+
+                  {/* 생성된 주제 칩 */}
+                  {generatedTopics.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
+                      {generatedTopics.map((t, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleSelectTopic(i, t)}
+                          style={{
+                            padding: "7px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer", transition: "all 0.2s",
+                            border: selectedTopicIdx === i ? "1px solid rgba(120,80,255,0.7)" : "1px solid rgba(255,255,255,0.12)",
+                            background: selectedTopicIdx === i ? "rgba(120,80,255,0.2)" : "rgba(255,255,255,0.05)",
+                            color: selectedTopicIdx === i ? "#c4a8ff" : "#a0a0b8",
+                            fontWeight: selectedTopicIdx === i ? 600 : 400,
+                          }}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 직접 입력 필드 */}
               <input
                 value={mode === "url" ? url : topic}
-                onChange={(e) => mode === "url" ? setUrl(e.target.value) : setTopic(e.target.value)}
-                placeholder={mode === "url" ? "https://www.youtube.com/watch?v=..." : "예: 30대 직장인이 퇴근 후 부업하는 법"}
+                onChange={(e) => {
+                  if (mode === "url") setUrl(e.target.value);
+                  else { setTopic(e.target.value); setSelectedTopicIdx(null); }
+                }}
+                placeholder={mode === "url" ? "https://www.youtube.com/watch?v=..." : "또는 직접 입력하세요"}
                 style={{ width: "100%", padding: "10px 14px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, color: "#e8e6f0", fontSize: 13, outline: "none", boxSizing: "border-box" }}
               />
 
