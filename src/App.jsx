@@ -295,6 +295,146 @@ function Raw({ text }) {
   );
 }
 
+// ✏️ TTS .txt 다운로드 유틸
+function extractTTSText(scriptContent) {
+  const marker = "[ TTS 버전 (마커 제거) ]";
+  const idx = scriptContent.indexOf(marker);
+  if (idx === -1) return scriptContent;
+  return scriptContent.slice(idx + marker.length).trim();
+}
+
+function downloadTTSTxt(content, category, topic) {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const topicSlug = topic.slice(0, 10).replace(/\s/g, "_");
+  const filename = `${category}_${topicSlug}_${date}_TTS.txt`;
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ✏️ 전체 TXT 저장 — 평문 포맷 (JSON 없음, TTS 사용 가능)
+function buildPlainText(allOutput, config) {
+  const { category, topic, url, target, tone, length, lang } = config;
+  const cat       = CATEGORIES.find((c) => c.id === category) || {};
+  const toneObj   = TONES.find((t) => t.id === tone) || {};
+  const lengthObj = LENGTHS.find((l) => l.id === length) || {};
+  const date      = new Date().toLocaleDateString("ko-KR");
+  const sep       = "=================================";
+  const lines     = [];
+
+  lines.push(sep);
+  lines.push("[Vibe App Factory 전체 대본]");
+  lines.push(`생성일: ${date}`);
+  lines.push(`채널 카테고리: ${cat.label || category}`);
+  lines.push(`주제: ${topic || url || ""}`);
+  lines.push(`타겟: ${target}`);
+  lines.push(`톤/스타일: ${toneObj.emoji || ""} ${toneObj.label || tone}`);
+  lines.push(`영상 길이: ${lengthObj.label || ""} (${lengthObj.sub || length})`);
+  lines.push(`언어: ${lang}`);
+  lines.push(sep);
+  lines.push("");
+
+  allOutput.forEach(({ step, content }) => {
+    lines.push(`[ STEP ${step.id} / 7  ${step.emoji} ${step.label} ]`);
+    lines.push(content || "");
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  });
+
+  lines.push(sep);
+  lines.push("[END]");
+  lines.push(sep);
+  return lines.join("\n");
+}
+
+function downloadAllTxt(allOutput, config) {
+  const date     = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const topicSlug = (config.topic || "content").slice(0, 15).replace(/\s/g, "_");
+  const filename = `vibeapp_대본_${date}.txt`;
+  const text     = buildPlainText(allOutput, config);
+  const blob     = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url      = URL.createObjectURL(blob);
+  const a        = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ✏️ XLSX 저장 — 비주얼/썸네일 행간 규칙: 헤더→빈행→데이터→빈행 (null 셀)
+async function loadXLSX() {
+  if (window.XLSX) return window.XLSX;
+  return new Promise((resolve, reject) => {
+    const sc = document.createElement("script");
+    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    sc.onload = () => resolve(window.XLSX);
+    sc.onerror = reject;
+    document.head.appendChild(sc);
+  });
+}
+
+async function exportXLSX(allOutput, config) {
+  const XLSX = await loadXLSX();
+  const { category, topic, url, target, tone, length } = config;
+  const cat       = CATEGORIES.find((c) => c.id === category) || {};
+  const toneObj   = TONES.find((t) => t.id === tone) || {};
+  const lengthObj = LENGTHS.find((l) => l.id === length) || {};
+  const topicSlug = (topic || url || "output").slice(0, 20).replace(/[^\w가-힣]/g, "_");
+  const date      = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const wb        = XLSX.utils.book_new();
+
+  allOutput.forEach(({ step, content }) => {
+    // STEP 4 비주얼 — 행간 규칙 적용
+    if (step.id === 4) {
+      const blocks = parseVisualBlocks(content);
+      const emptyRow = [null, null, null, null, null, null];
+      const rows = [];
+      blocks.forEach((b) => {
+        rows.push(emptyRow);
+        rows.push([b.씬명, b.타임스탬프, b.영어, b.한국어, b.broll, b.자막]);
+      });
+      rows.push(emptyRow);
+      const wsData = [
+        ["씬", "타임스탬프", "영어 프롬프트", "한국어 설명", "B-roll", "자막"],
+        ...rows,
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws["!cols"] = [{ wch: 14 }, { wch: 10 }, { wch: 36 }, { wch: 24 }, { wch: 20 }, { wch: 24 }];
+      XLSX.utils.book_append_sheet(wb, ws, "🎨 비주얼");
+      return;
+    }
+
+    // STEP 5 썸네일 — 행간 규칙 적용
+    if (step.id === 5) {
+      const blocks = parseThumbnailBlocks(content);
+      const emptyRow = [null, null, null, null, null, null];
+      const rows = [];
+      blocks.forEach((b) => {
+        rows.push(emptyRow);
+        rows.push([`안 ${b.안}`, b.컨셉, b.영어, b.한국어, b.텍스트, b.색상]);
+      });
+      rows.push(emptyRow);
+      const wsData = [
+        ["안", "컨셉", "영어 프롬프트", "한국어 설명", "텍스트 오버레이", "색상 조합"],
+        ...rows,
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws["!cols"] = [{ wch: 5 }, { wch: 16 }, { wch: 36 }, { wch: 24 }, { wch: 20 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, ws, "🖼 썸네일");
+      return;
+    }
+
+    // 나머지 STEP — 텍스트 그대로
+    const wsData = [[`STEP ${step.id} ${step.emoji} ${step.label}`], [""], [content || ""]];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws["!cols"] = [{ wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, ws, `${step.emoji} ${step.label}`);
+  });
+
+  XLSX.writeFile(wb, `vibeapp_${topicSlug}_${date}.xlsx`);
+}
+
 function StepOutputViewer({ step, content }) {
   if (!content) return null;
   return (
@@ -358,6 +498,9 @@ export default function VibeAppFactory() {
     const t2 = setTimeout(() => setLoadingMsg("✍️ 주제 생성 중..."),   4000);
 
     try {
+      // ✏️ 기타(ETC) 카테고리 web_search 오인 방지 — 악기 기타(guitar) 결과 차단
+      const searchLabel = cat.id === "other" ? "심리학 라이프스타일 사회이슈" : cat.label;
+
       const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -367,7 +510,7 @@ export default function VibeAppFactory() {
           tools: [{ type: "web_search_20250305", name: "web_search" }],
           messages: [{
             role: "user",
-            content: `당신은 유튜브 ${cat.label} 채널 전문 콘텐츠 기획자입니다.\n타겟 독자: ${target}\n\n## 작업 순서 (반드시 이 순서로 실행)\n\n### STEP 1 — 실시간 트렌드 수집 (web_search 필수 실행)\n아래 3가지를 순서대로 검색하세요:\n1. web_search("유튜브 ${cat.label} 인기 영상 트렌드 ${year}")\n2. web_search("${target} 관심사 요즘 트렌드 핫이슈")\n3. web_search("유튜브 ${cat.label} 최신 인기 키워드")\n\n### STEP 2 — 주제 생성\n검색 결과에서 수집한 실시간 트렌드를 반영하여 아래 조건에 맞는 유튜브 영상 주제 6개를 생성하세요:\n\n조건:\n- 각 주제는 20자 이내 한국어 문장\n- 실제 검색된 트렌드/이슈/키워드를 1개 이상 반영\n- 클릭을 유도하는 호기심/공감 자극 형태\n- ${target}이 지금 당장 보고 싶어할 주제\n- 중복 없이 다양한 각도 (정보형/감성형/실용형/충격형 혼합)\n\n### STEP 3 — 출력\n반드시 아래 JSON 형식만 출력. 다른 텍스트 일절 금지:\n["주제1", "주제2", "주제3", "주제4", "주제5", "주제6"]`
+            content: `당신은 유튜브 ${cat.label} 채널 전문 콘텐츠 기획자입니다.\n타겟 독자: ${target}\n\n## 작업 순서 (반드시 이 순서로 실행)\n\n### STEP 1 — 실시간 트렌드 수집 (web_search 필수 실행)\n아래 3가지를 순서대로 검색하세요:\n1. web_search("유튜브 ${searchLabel} 인기 영상 트렌드 ${year}")\n2. web_search("${target} 관심사 요즘 트렌드 핫이슈")\n3. web_search("유튜브 ${searchLabel} 최신 인기 키워드")\n\n### STEP 2 — 주제 생성\n검색 결과에서 수집한 실시간 트렌드를 반영하여 아래 조건에 맞는 유튜브 영상 주제 6개를 생성하세요:\n\n조건:\n- 각 주제는 20자 이내 한국어 문장\n- 실제 검색된 트렌드/이슈/키워드를 1개 이상 반영\n- 클릭을 유도하는 호기심/공감 자극 형태\n- ${target}이 지금 당장 보고 싶어할 주제\n- 중복 없이 다양한 각도 (정보형/감성형/실용형/충격형 혼합)\n\n### STEP 3 — 출력\n반드시 아래 JSON 형식만 출력. 다른 텍스트 일절 금지:\n["주제1", "주제2", "주제3", "주제4", "주제5", "주제6"]`
           }]
         }),
       });
@@ -769,11 +912,51 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
 
               {/* 탭 콘텐츠 */}
               <div style={{ padding: "16px 16px 20px", minHeight: 120 }}>
-                {activeOutput
-                  ? <StepOutputViewer step={activeOutput.step} content={activeOutput.content} />
-                  : <div style={{ fontSize: 11, color: "#555", textAlign: "center", padding: "28px 0" }}>위 탭을 선택하세요</div>
-                }
+                {activeOutput ? (
+                  <>
+                    <StepOutputViewer step={activeOutput.step} content={activeOutput.content} />
+                    {/* ✏️ 대본 탭 전용 TTS 다운로드 버튼 */}
+                    {activeTab === 3 && (
+                      <button
+                        onClick={() => {
+                          const tts = extractTTSText(activeOutput.content);
+                          downloadTTSTxt(tts, category, mode === "url" ? url : topic);
+                        }}
+                        style={{
+                          padding: "10px 20px", borderRadius: 10, marginTop: 12,
+                          border: "1px solid rgba(120,80,255,0.4)",
+                          background: "rgba(120,80,255,0.1)",
+                          color: "#c4a8ff", fontSize: 13, cursor: "pointer",
+                          display: "block",
+                        }}
+                      >
+                        📄 TTS 버전 .txt 다운로드
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ fontSize: 11, color: "#555", textAlign: "center", padding: "28px 0" }}>위 탭을 선택하세요</div>
+                )}
               </div>
+            </div>
+
+            {/* ✏️ 전체 저장 버튼 영역 */}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => downloadAllTxt(allOutput, { category, topic, url, target, tone, length, lang })}
+                style={{ flex: 1, padding: "13px 0", borderRadius: 14, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", color: "#c0b8d8", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                📄 전체 TXT 저장
+              </button>
+              <button
+                onClick={async () => {
+                  try { await exportXLSX(allOutput, { category, topic, url, target, tone, length }); }
+                  catch (e) { alert("XLSX 저장 실패: " + e.message); }
+                }}
+                style={{ flex: 1, padding: "13px 0", borderRadius: 14, background: "rgba(255,180,0,0.12)", border: "1px solid rgba(255,180,0,0.35)", color: "#ffd060", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                📥 XLSX 저장
+              </button>
             </div>
 
             <button onClick={reset} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(120,80,255,0.15)", border: "1px solid rgba(120,80,255,0.4)", color: "#c4a8ff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
