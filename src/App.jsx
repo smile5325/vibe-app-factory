@@ -425,10 +425,23 @@ async function exportXLSX(allOutput, config) {
       return;
     }
 
-    // 나머지 STEP — 텍스트 그대로
-    const wsData = [[`STEP ${step.id} ${step.emoji} ${step.label}`], [""], [content || ""]];
+    // ✏️ 나머지 STEP — 줄별 행 분리 + 마크다운 기호 제거로 가독성 확보
+    const cleanLine = (line) =>
+      line.replace(/^#{1,3}\s*/g, "").replace(/\*\*/g, "").replace(/`/g, "").trimEnd();
+
+    const contentRows = (content || "")
+      .split("\n")
+      .map((line) => [cleanLine(line)]);
+
+    const wsData = [
+      [`STEP ${step.id} ${step.emoji} ${step.label}`],
+      [""],
+      ...contentRows,
+    ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws["!cols"] = [{ wch: 80 }];
+    ws["!cols"] = [{ wch: 100 }];
+    // A1 헤더 스타일
+    if (ws["A1"]) ws["A1"].s = { font: { bold: true, sz: 12 }, fill: { fgColor: { rgb: "1A1A2E" } } };
     XLSX.utils.book_append_sheet(wb, ws, `${step.emoji} ${step.label}`);
   });
 
@@ -577,12 +590,19 @@ export default function VibeAppFactory() {
 STEP 4(비주얼)는 씬명:/타임스탬프:/영어 프롬프트:/한국어 설명:/B-roll:/자막: 형식 엄수.
 STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스트 오버레이:/색상 조합: 형식 엄수.`;
 
+        // ✏️ STEP별 max_tokens 차등 — 대본(STEP 3)은 길이에 따라 최대 8000
+        const scriptTokens = { short: 2000, mid: 6000, long30: 8000, long60: 8000 };
+        const stepMaxTokens = step.id === 3
+          ? (scriptTokens[length] || 6000)
+          : step.id === 4 ? 3000
+          : 2000;
+
         const res = await fetch("/api/claude", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-20250514",
-            max_tokens: 1500,
+            max_tokens: stepMaxTokens,
             stream: true,
             messages: [{ role: "user", content: userPrompt }],
           }),
