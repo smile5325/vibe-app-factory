@@ -414,13 +414,36 @@ async function loadXLSX() {
 
 async function exportXLSX(allOutput, config) {
   const XLSX = await loadXLSX();
-  const { category, topic, url, target, tone, length } = config;
+  const { category, topic, url, target, tone, length, mode, lang, characterGender } = config; // ✏️ 추가
   const cat       = CATEGORIES.find((c) => c.id === category) || {};
   const toneObj   = TONES.find((t) => t.id === tone) || {};
   const lengthObj = LENGTHS.find((l) => l.id === length) || {};
   const topicSlug = (topic || url || "output").slice(0, 20).replace(/[^\w가-힣]/g, "_");
   const date      = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const fileName  = `vibeapp_${topicSlug}_${date}.xlsx`; // ✏️
   const wb        = XLSX.utils.book_new();
+
+  // ✏️ Sheet 0: 주제개요 — 첫 번째 탭
+  const wsOvData = [
+    ["📋 주제 개요", null],
+    [null, null],
+    ["항목", "설정값"],
+    ["콘텐츠 모드",   mode === "url" ? "URL 역설계 모드" : "주제 직접 입력 모드"],
+    ["채널 카테고리", `${cat.emoji || ""} ${cat.label || category}`],
+    ["주제 / 키워드", topic || url || ""],
+    ["타겟 독자",     target],
+    ["주인공 캐릭터", characterGender === "female" ? "👩 여성" : "👨 남성"],
+    ["톤 / 스타일",   `${toneObj.emoji || ""} ${toneObj.label || tone}`],
+    ["영상 길이",     `${lengthObj.label || length}${lengthObj.sub ? ` (${lengthObj.sub})` : ""}`],
+    ["언어",          lang],
+    [null, null],
+    ["생성 일시",     new Date().toLocaleString("ko-KR")],
+    ["파일명",        fileName],
+  ];
+  const wsOv = XLSX.utils.aoa_to_sheet(wsOvData);
+  wsOv["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+  wsOv["!cols"] = [{ wch: 18 }, { wch: 40 }];
+  XLSX.utils.book_append_sheet(wb, wsOv, "📋 주제개요");
 
   allOutput.forEach(({ step, content }) => {
     // ✏️ STEP 4 비주얼 — 9열 + 시퀀스 세부 행
@@ -505,7 +528,7 @@ async function exportXLSX(allOutput, config) {
     XLSX.utils.book_append_sheet(wb, ws, `${step.emoji} ${step.label}`);
   });
 
-  XLSX.writeFile(wb, `vibeapp_${topicSlug}_${date}.xlsx`);
+  XLSX.writeFile(wb, fileName); // ✏️
 }
 
 function StepOutputViewer({ step, content }) {
@@ -1090,7 +1113,7 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
               </button>
               <button
                 onClick={async () => {
-                  try { await exportXLSX(allOutput, { category, topic, url, target, tone, length }); }
+                  try { await exportXLSX(allOutput, { category, topic, url, target, tone, length, mode, lang, characterGender }); } // ✏️
                   catch (e) { alert("XLSX 저장 실패: " + e.message); }
                 }}
                 style={{ flex: 1, padding: "13px 0", borderRadius: 14, background: "rgba(255,180,0,0.12)", border: "1px solid rgba(255,180,0,0.35)", color: "#ffd060", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
