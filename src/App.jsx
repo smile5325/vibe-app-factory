@@ -433,7 +433,7 @@ async function exportXLSX(allOutput, config) {
       ];
       const rows = [];
       blocks.forEach((b, blockIdx) => {
-        rows.push(emptyRow);
+        // ✏️ 씬 메인행 (앞 빈 행 제거 — 씬 사이 간격은 뒤에서 처리)
         rows.push([b.씬명, b.타임스탬프, b.영어, b.한국어, b.broll, b.자막,
           b.grokFilename ?? "", b.complexity ?? "", b.imageCount ?? ""]);
         // ✏️ 시퀀스 세부 행 (권장이미지수 2장 이상)
@@ -441,16 +441,20 @@ async function exportXLSX(allOutput, config) {
         if (imageCountNum >= 2) {
           const sceneNum = String(blockIdx + 1).padStart(2, "0");
           const keyword = (b.씬명 || `scene${sceneNum}`).slice(0, 8).replace(/\s/g, "_");
+          rows.push(emptyRow); // ✏️ 메인행↔첫 서브행 사이 빈 행 1개
           for (let j = 0; j < imageCountNum; j++) {
             const seq = String(j + 1).padStart(2, "0");
             const angle = ANGLES[j] || ANGLES[ANGLES.length - 1];
             const seqPrompt = `same CHAR reference, same setting, cinematic 16:9, ${angle}, ${b.영어}`;
             rows.push([`${b.씬명}_${seq}`, b.타임스탬프, seqPrompt, b.한국어, b.broll, b.자막,
               `scene${sceneNum}_${seq}_${keyword}`, b.complexity ?? "", `${seq}/${imageCountNum}`]);
+            if (j < imageCountNum - 1) rows.push(emptyRow); // ✏️ 서브행 사이 빈 행 1개
           }
         }
+        // ✏️ 씬 사이 빈 행 2개 (서브행 없는 씬도 동일)
+        rows.push(emptyRow);
+        rows.push(emptyRow);
       });
-      rows.push(emptyRow);
       const wsData = [
         ["씬", "타임스탬프", "영어 프롬프트", "한국어 설명", "B-roll", "자막", "Grok 파일명", "복잡도", "권장이미지수"],
         ...rows,
