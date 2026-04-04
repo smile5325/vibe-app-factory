@@ -843,8 +843,8 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
             {error && <div style={{ background: "rgba(220,60,60,0.15)", border: "1px solid rgba(220,60,60,0.3)", borderRadius: 12, padding: "11px 15px", color: "#ff8080", fontSize: 12 }}>⚠️ {error}</div>}
 
             {/* 콘텐츠 설정 카드 */}
-            <div style={{ background: "#ffffff", border: "1px solid #e8e8e8", borderRadius: 14, padding: 18 }}>
-              <div style={{ fontSize: 10, color: "#555", marginBottom: 12, letterSpacing: 1.5, fontWeight: 600 }}>콘텐츠 설정</div>
+            <div style={{ background: "#1A1A24", border: "1px solid #2A2A38", borderRadius: 14, padding: 18 }}>
+              <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 12, letterSpacing: 1.5, fontWeight: 600 }}>콘텐츠 설정</div>
 
               {/* 모드 */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
@@ -852,9 +852,9 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
                   <button key={m.id} onClick={() => setMode(m.id)} style={{
                     padding: "12px 0", fontSize: 13, fontWeight: mode === m.id ? 600 : 400,
                     borderRadius: 10, cursor: "pointer", transition: "all 0.2s",
-                    border: mode === m.id ? "1.5px solid rgba(120,80,255,0.6)" : "1px solid #e0e0e0",
-                    background: mode === m.id ? "rgba(120,80,255,0.10)" : "#f7f7f7",
-                    color: mode === m.id ? "#7040c8" : "#555",
+                    border: mode === m.id ? "1.5px solid #6C5CE7" : "1px solid #3A3A50",
+                    background: mode === m.id ? "#6C5CE7" : "#1E1E2E",
+                    color: mode === m.id ? "#FFFFFF" : "#D1D5DB",
                   }}>
                     {m.icon} {m.label}
                   </button>
@@ -862,20 +862,20 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
               </div>
 
               {/* ✏️ 카테고리 */}
-              <div style={{ fontSize: 10, color: "#555", marginBottom: 7, letterSpacing: 1.5, fontWeight: 600 }}>채널 카테고리</div>
+              <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 7, letterSpacing: 1.5, fontWeight: 600 }}>채널 카테고리</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                 {CATEGORIES.map((c) => (
                   <button key={c.id} onClick={() => { setCategory(c.id); setNiche(""); }} style={{
                     display: "flex", alignItems: "center", gap: 5,
-                    padding: "5px 11px", borderRadius: 20, fontSize: 12, cursor: "pointer", transition: "all 0.2s",
-                    border: category === c.id ? `1.5px solid ${c.dot}` : "1px solid #d8d8d8",
-                    background: category === c.id ? `${c.dot}22` : "#f5f5f5",
-                    color: category === c.id ? c.dot : "#555",
+                    padding: "6px 14px", borderRadius: 20, fontSize: 13, cursor: "pointer", transition: "all 0.2s",
+                    border: category === c.id ? `1.5px solid ${c.dot}` : "1px solid #3A3A50",
+                    background: category === c.id ? `${c.dot}33` : "#1E1E2E",
+                    color: category === c.id ? "#FFFFFF" : "#D1D5DB",
                     fontWeight: category === c.id ? 600 : 400,
                   }}>
                     <span style={{ width: 7, height: 7, borderRadius: "50%", background: c.dot, display: "inline-block", flexShrink: 0 }} />
                     {c.label}
-                    {c.hot && <span style={{ background: "#FAEEDA", color: "#633806", fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600, marginLeft: 2 }}>HOT</span>}
+                    {c.hot && <span style={{ background: "#3D2A0A", color: "#F59E0B", fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600, marginLeft: 2 }}>HOT</span>}
                   </button>
                 ))}
               </div>
@@ -884,14 +884,14 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
                 const cat = CATEGORIES.find(c => c.id === category);
                 return cat ? (
                   <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 10, color: "#888", marginBottom: 6, letterSpacing: 1 }}>세부 니치</div>
+                    <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 6, letterSpacing: 1 }}>세부 니치</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                       {cat.niches.map(n => (
                         <button key={n} onClick={() => setNiche(niche === n ? "" : n)} style={{
-                          padding: "4px 10px", borderRadius: 16, fontSize: 11, cursor: "pointer", transition: "all 0.15s",
-                          border: niche === n ? `1.5px solid ${cat.dot}` : "1px solid #e0e0e0",
-                          background: niche === n ? `${cat.dot}18` : "#fff",
-                          color: niche === n ? cat.dot : "#666",
+                          padding: "4px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer", transition: "all 0.15s",
+                          border: niche === n ? `1.5px solid ${cat.dot}` : "1px solid #3A3A50",
+                          background: niche === n ? `${cat.dot}33` : "#1E1E2E",
+                          color: niche === n ? "#FFFFFF" : "#9CA3AF",
                           fontWeight: niche === n ? 600 : 400,
                         }}>{n}</button>
                       ))}
@@ -901,7 +901,7 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
               })()}
 
               {/* ✏️ 입력 — AI 주제 생성 포함 */}
-              <div style={{ fontSize: 10, color: "#6b6880", marginBottom: 7, letterSpacing: 1.5 }}>
+              <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 7, letterSpacing: 1.5, fontWeight: 600 }}>
                 {mode === "url" ? "유튜브 URL" : "주제 / 키워드"}
               </div>
 
@@ -913,8 +913,8 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
                     disabled={isGenerating}
                     style={{
                       padding: "8px 18px", borderRadius: 8, fontSize: 12, cursor: isGenerating ? "not-allowed" : "pointer",
-                      border: "1px solid rgba(120,80,255,0.4)", background: "rgba(120,80,255,0.08)",
-                      color: "#7040c8", fontWeight: 600, opacity: isGenerating ? 0.6 : 1, transition: "all 0.2s",
+                      border: "1px solid #6C5CE7", background: isGenerating ? "#1E1E2E" : "linear-gradient(135deg, #1a0e2e, #120e20)",
+                      color: "#A29BFE", fontWeight: 600, opacity: isGenerating ? 0.6 : 1, transition: "all 0.2s",
                     }}
                   >
                     {isGenerating ? `⏳ ${loadingMsg}` : "🔄 AI 주제 생성"}
@@ -924,9 +924,9 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
                   {topicError && (
                     <div style={{
                       marginTop: 8, padding: "8px 12px",
-                      background: "#fff0f0",
-                      border: "1px solid #f0b0b0",
-                      borderRadius: 8, fontSize: 12, color: "#c43333",
+                      background: "rgba(221,85,85,0.12)",
+                      border: "1px solid rgba(221,85,85,0.35)",
+                      borderRadius: 8, fontSize: 12, color: "#ff8080",
                     }}>
                       ⚠️ {topicError}
                     </div>
@@ -941,9 +941,9 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
                           onClick={() => handleSelectTopic(i, t)}
                           style={{
                             padding: "7px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer", transition: "all 0.2s",
-                            border: selectedTopicIdx === i ? "1px solid rgba(120,80,255,0.6)" : "1px solid #e0e0e0",
-                            background: selectedTopicIdx === i ? "rgba(120,80,255,0.10)" : "#f5f5f5",
-                            color: selectedTopicIdx === i ? "#7040c8" : "#555",
+                            border: selectedTopicIdx === i ? "1px solid #6C5CE7" : "1px solid #3A3A50",
+                            background: selectedTopicIdx === i ? "#6C5CE7" : "#1E1E2E",
+                            color: selectedTopicIdx === i ? "#FFFFFF" : "#D1D5DB",
                             fontWeight: selectedTopicIdx === i ? 600 : 400,
                           }}
                         >
@@ -963,32 +963,32 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
                   else { setTopic(e.target.value); setSelectedTopicIdx(null); }
                 }}
                 placeholder={mode === "url" ? "https://www.youtube.com/watch?v=..." : "또는 직접 입력하세요"}
-                style={{ width: "100%", padding: "10px 14px", background: "#f8f8f8", border: "1px solid #e0e0e0", borderRadius: 10, color: "#333", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                style={{ width: "100%", padding: "10px 14px", background: "#1E1E2E", border: "1px solid #3A3A50", borderRadius: 10, color: "#F3F4F6", fontSize: 13, outline: "none", boxSizing: "border-box" }}
               />
 
               {/* ✏️ 타겟 독자 */}
-              <div style={{ fontSize: 10, color: "#555", margin: "13px 0 7px", letterSpacing: 1.5, fontWeight: 600 }}>타겟 독자</div>
+              <div style={{ fontSize: 12, color: "#9CA3AF", margin: "13px 0 7px", letterSpacing: 1.5, fontWeight: 600 }}>타겟 독자</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {TARGETS.map((t) => (
                   <button key={t} onClick={() => setTarget(t)} style={{
-                    padding: "5px 11px", borderRadius: 20, fontSize: 12, cursor: "pointer", transition: "all 0.2s",
-                    border: target === t ? "1.5px solid #BA7517" : "1px solid #d8d8d8",
-                    background: target === t ? "#FFF3E0" : "#f5f5f5",
-                    color: target === t ? "#7A4E0A" : "#555",
+                    padding: "6px 14px", borderRadius: 20, fontSize: 13, cursor: "pointer", transition: "all 0.2s",
+                    border: target === t ? "1px solid #6C5CE7" : "1px solid #3A3A50",
+                    background: target === t ? "#6C5CE7" : "#1E1E2E",
+                    color: target === t ? "#FFFFFF" : "#D1D5DB",
                     fontWeight: target === t ? 600 : 400,
                   }}>{t}</button>
                 ))}
               </div>
 
               {/* ✏️ 주인공 캐릭터 (4종) */}
-              <div style={{ fontSize: 10, color: "#555", margin: "13px 0 7px", letterSpacing: 1.5, fontWeight: 600 }}>주인공 캐릭터</div>
+              <div style={{ fontSize: 12, color: "#9CA3AF", margin: "13px 0 7px", letterSpacing: 1.5, fontWeight: 600 }}>주인공 캐릭터</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {[{ id: "male", label: "👨 남성" }, { id: "female", label: "👩 여성" }, { id: "ai", label: "🤖 AI 캐릭터" }, { id: "faceless", label: "🎭 페이스리스" }].map((g) => (
                   <button key={g.id} onClick={() => setCharacterGender(g.id)} style={{
-                    padding: "5px 11px", borderRadius: 20, fontSize: 12, cursor: "pointer", transition: "all 0.2s",
-                    border: characterGender === g.id ? "1.5px solid rgba(120,80,255,0.6)" : "1px solid #d8d8d8",
-                    background: characterGender === g.id ? "rgba(120,80,255,0.10)" : "#f5f5f5",
-                    color: characterGender === g.id ? "#7040c8" : "#555",
+                    padding: "6px 14px", borderRadius: 20, fontSize: 13, cursor: "pointer", transition: "all 0.2s",
+                    border: characterGender === g.id ? "1px solid #6C5CE7" : "1px solid #3A3A50",
+                    background: characterGender === g.id ? "#6C5CE7" : "#1E1E2E",
+                    color: characterGender === g.id ? "#FFFFFF" : "#D1D5DB",
                     fontWeight: characterGender === g.id ? 600 : 400,
                   }}>
                     {g.label}
