@@ -47,12 +47,33 @@ function buildHarnessPrompt({ mode, category, topic, url, target, tone, length, 
     : `### 주제/키워드 ###\n${topic}`;
   // ✏️ 캐릭터 레퍼런스 블록 (4종 분기)
   const charBlock = characterGender === "female"
-    ? `[CHARACTER REFERENCE — 전 씬 공통 고정]\nCHAR: Korean female, late 20s, slim build, shoulder-length black hair, warm skin tone, business casual attire (white/beige)\n규칙: 모든 씬의 영어 프롬프트 첫 줄에 "same character as CHAR reference," 를 반드시 삽입`
+    ? `[CHARACTER REFERENCE — 전 씬 공통 고정]
+CHAR: Korean female, late 20s, slim build, shoulder-length black hair, warm skin tone, business casual attire (white/beige)
+STRICT RULES — ALL SCENES:
+- Same Korean female character must appear in every scene without exception
+- Do NOT change ethnicity, face, gender, age, or clothing style across any scene
+- NEVER generate western faces, foreign appearance, or random people
+- Every prompt must start with: "same Korean female CHAR reference, same face, same clothing,"`
     : characterGender === "ai"
-    ? `[CHARACTER REFERENCE — 전 씬 공통 고정]\nCHAR: Futuristic AI avatar, holographic glowing form, abstract humanoid, cool blue tones\n규칙: 모든 씬의 영어 프롬프트 첫 줄에 "same character as CHAR reference," 를 반드시 삽입`
+    ? `[CHARACTER REFERENCE — 전 씬 공통 고정]
+CHAR: Futuristic AI avatar, holographic glowing form, abstract humanoid, cool blue tones
+STRICT RULES — ALL SCENES:
+- Same AI avatar must appear in every scene without exception
+- Maintain identical visual style, color tone, and form throughout
+- Every prompt must start with: "same AI avatar CHAR reference, same holographic form,"`
     : characterGender === "faceless"
-    ? `[CHARACTER REFERENCE — 페이스리스 스타일]\n규칙: 모든 씬에서 사람 얼굴 등장 없이 손/오브젝트/텍스트/B-roll 중심으로 구성`
-    : `[CHARACTER REFERENCE — 전 씬 공통 고정]\nCHAR: Korean male, late 20s, slim build, short black hair, warm skin tone, business casual attire (navy/gray)\n규칙: 모든 씬의 영어 프롬프트 첫 줄에 "same character as CHAR reference," 를 반드시 삽입`;
+    ? `[CHARACTER REFERENCE — 페이스리스 스타일]
+STRICT RULES — ALL SCENES:
+- No human faces in any scene
+- Hands, objects, text overlays, B-roll only
+- NEVER show face, head, or identifiable person`
+    : `[CHARACTER REFERENCE — 전 씬 공통 고정]
+CHAR: Korean male, late 20s, slim build, short black hair, warm skin tone, business casual attire (navy/gray)
+STRICT RULES — ALL SCENES:
+- Same Korean male character must appear in every scene without exception
+- Do NOT change ethnicity, face, gender, age, or clothing style across any scene
+- NEVER generate western faces, foreign appearance, or random people
+- Every prompt must start with: "same Korean male CHAR reference, same face, same clothing,"`;
 
   return `=== VIBE APP FACTORY — HARNESS ENGINE v2.0 ===
 
