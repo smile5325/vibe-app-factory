@@ -1,6 +1,17 @@
 # Vibe App Factory 버전 히스토리
 
-## 현재 버전: v1.2.2
+## 현재 버전: v1.2.3
+
+---
+
+#### v1.2.3 | 2026-04-07
+**변경 유형:** Patch
+**수정 파일:** `src/App.jsx`
+**수정 내용:**
+  - Before: charBlock — 단순 "same character as CHAR reference," 규칙 1줄
+  - After:  STRICT RULES 4항목 추가 (민족·얼굴 고정, 서양인 금지, 프롬프트 시작 문구 명시)
+**관련 에러:** 없음
+**배포 상태:** 🔧 로컬 (GitHub push 완료)
 
 ---
 
