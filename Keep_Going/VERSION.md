@@ -1,6 +1,17 @@
 # Vibe App Factory 버전 히스토리
 
-## 현재 버전: v1.2.3
+## 현재 버전: v1.2.4
+
+---
+
+#### v1.2.4 | 2026-04-07
+**변경 유형:** Minor
+**수정 파일:** `src/App.jsx`
+**수정 내용:**
+  - Before: STEP 3 분량 지시 없음, STEP 4 카테고리 비주얼 스타일 없음
+  - After:  STEP 3 앞 `[대본 분량 필수 준수]` 블록 삽입 (scriptTarget/scriptSection 변수로 길이별 타겟 자동 적용) + STEP 4 charBlock 위 `[VISUAL STYLE — 전 씬 공통 적용]` 블록 삽입 (카테고리 10종 색상/스타일 매핑)
+**관련 에러:** 없음
+**배포 상태:** 🔧 로컬 (GitHub push 완료)
 
 ---
 
