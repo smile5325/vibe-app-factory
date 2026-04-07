@@ -1,6 +1,17 @@
 # Vibe App Factory 버전 히스토리
 
-## 현재 버전: v1.2.4
+## 현재 버전: v1.2.5
+
+---
+
+#### v1.2.5 | 2026-04-07
+**변경 유형:** Minor
+**수정 파일:** `src/App.jsx`
+**수정 내용:**
+  - Before: STEP 4 비주얼 생성 시 STEP 3 대본과 무관하게 임의 장면 생성 가능
+  - After:  STEP 4 실행 시 STEP 3 대본(최대 3000자)을 userPrompt에 자동 주입 + buildHarnessPrompt STEP 4 섹션 앞에 [대사-이미지 연동 규칙] 블록 삽입 → 대사 기반 이미지 프롬프트 생성 강제
+**관련 에러:** 없음
+**배포 상태:** 🔧 로컬 (GitHub push 완료)
 
 ---
 

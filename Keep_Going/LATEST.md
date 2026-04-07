@@ -1,5 +1,5 @@
 # VIBE APP FACTORY — LATEST
-## 현재 버전: v1.2.4
+## 현재 버전: v1.2.5
 - 최종 업데이트: 2026-04-07
 - 작업 폴더: D:\projects\vibe-app-factory
 
