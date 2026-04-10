@@ -666,15 +666,19 @@ async function exportXLSX(allOutput, config) {
   return { buffer, fileName };
 }
 
-// ✏️ 전체 저장 — 카테고리별 폴더 자동 매핑 + File System Access API
-const _vafDirCache = {};
+// ✏️ 전체 저장 — 루트(Whisk Downloads) 1회 선택 → 카테고리+날짜 서브폴더 자동 생성
+// 저장 루트: D:\projects\PROJECT_mp4\Whisk Downloads\
+let _whiskRootHandle = null; // 세션 내 루트 핸들 캐시 (카테고리 무관 공유)
+
 async function saveAllFiles(allOutput, config, setSaveMsg) {
   const { category, topic, url } = config;
-  const folderName  = CATEGORY_FOLDER_MAP[category] || 'LinkedM';
-  const date        = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const topicSlug   = (topic || url || "output").slice(0, 20).replace(/[^\w가-힣]/g, "_");
-  const subFolder   = `${date}_${topicSlug}`;
-  const targetPath  = `D:\\projects\\PROJECT_mp4\\Whisk Downloads\\${folderName}`;
+  const categoryFolder = CATEGORY_FOLDER_MAP[category] || 'LinkedM';
+  const date           = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const topicSlug      = (topic || url || "output").slice(0, 20).replace(/[^\w가-힣]/g, "_");
+  const subFolder      = `${date}_${topicSlug}`;
+  // ✏️ 고정 루트 경로 — 성공 메시지에 표시할 전체 경로
+  const WHISK_ROOT  = `D:\\projects\\PROJECT_mp4\\Whisk Downloads`;
+  const fullSavePath = `${WHISK_ROOT}\\${categoryFolder}\\${subFolder}`;
 
   setSaveMsg("⏳ XLSX 생성 중 (씬 키워드 자동 생성)...");
   try {
@@ -692,22 +696,33 @@ async function saveAllFiles(allOutput, config, setSaveMsg) {
     const ttsText = scriptOutput ? extractTTSText(scriptOutput.content) : "";
 
     if ('showDirectoryPicker' in window) {
-      setSaveMsg(`📂 아래 폴더를 선택해주세요:\n${targetPath}`);
-      // 세션 캐시 재사용
-      let dirHandle = _vafDirCache[category];
-      if (dirHandle) {
+      // ✏️ 루트 핸들 재사용 or 신규 선택
+      let rootHandle = _whiskRootHandle;
+      if (rootHandle) {
         try {
-          const p = await dirHandle.queryPermission({ mode: 'readwrite' });
-          if (p !== 'granted') { await dirHandle.requestPermission({ mode: 'readwrite' }); }
-        } catch { dirHandle = null; }
+          const p = await rootHandle.queryPermission({ mode: 'readwrite' });
+          if (p !== 'granted') {
+            const r = await rootHandle.requestPermission({ mode: 'readwrite' });
+            if (r !== 'granted') rootHandle = null;
+          }
+        } catch { rootHandle = null; }
       }
-      if (!dirHandle) {
-        dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-        _vafDirCache[category] = dirHandle;
+      if (!rootHandle) {
+        // ✏️ 루트 폴더 선택 가이드 — Whisk Downloads 폴더 선택 요청
+        setSaveMsg(`📂 폴더 선택창이 열립니다.\n아래 경로의 "Whisk Downloads" 폴더를 선택해주세요:\n${WHISK_ROOT}`);
+        await new Promise(r => setTimeout(r, 400)); // React 렌더 대기
+        rootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        _whiskRootHandle = rootHandle;
       }
-      // 날짜_주제 서브폴더 생성
-      const subDir = await dirHandle.getDirectoryHandle(subFolder, { create: true });
-      // 파일 3개 저장
+
+      setSaveMsg(`⏳ 저장 중...\n${fullSavePath}`);
+
+      // ✏️ 카테고리 서브폴더 자동 생성 (예: PhiloNomad\)
+      const catDir = await rootHandle.getDirectoryHandle(categoryFolder, { create: true });
+      // ✏️ 날짜_주제 서브폴더 자동 생성
+      const subDir = await catDir.getDirectoryHandle(subFolder, { create: true });
+
+      // ✏️ 파일 3개 저장
       const write = async (name, blob) => {
         const fh = await subDir.getFileHandle(name, { create: true });
         const w  = await fh.createWritable();
@@ -716,14 +731,16 @@ async function saveAllFiles(allOutput, config, setSaveMsg) {
       await write(fileName, xlsxBlob);
       await write(txtName,  new Blob([대본Text], { type: "text/plain;charset=utf-8" }));
       await write(ttsName,  new Blob([ttsText],  { type: "text/plain;charset=utf-8" }));
-      setSaveMsg(`✅ 저장 완료: ${dirHandle.name}\\${subFolder}\n📊 ${fileName}  📄 ${txtName}  📄 ${ttsName}`);
+
+      // ✏️ 저장 완료 메시지 — 전체 절대 경로 표시
+      setSaveMsg(`✅ 저장 완료:\n${fullSavePath}\n\n📊 ${fileName}\n📄 ${txtName}\n📄 ${ttsName}`);
     } else {
-      // File System API 미지원 → 브라우저 다운로드 폴백
+      // ✏️ File System API 미지원 → 브라우저 다운로드 폴백
       const dl = (blob, name) => { const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = name; a.click(); URL.revokeObjectURL(u); };
       dl(xlsxBlob, fileName);
       dl(new Blob([대본Text], { type: "text/plain;charset=utf-8" }), txtName);
       if (ttsText) dl(new Blob([ttsText], { type: "text/plain;charset=utf-8" }), ttsName);
-      setSaveMsg(`✅ 다운로드 완료  ↙ 아래 경로로 이동해주세요:\n${targetPath}\\${subFolder}`);
+      setSaveMsg(`✅ 다운로드 완료\n↙ 아래 경로로 파일을 이동해주세요:\n${fullSavePath}`);
     }
   } catch (e) {
     if (e.name === 'AbortError') setSaveMsg("취소됨");
