@@ -52,12 +52,32 @@ const STEPS = [
   { id: 7, emoji: "📱", label: "배포"       },
 ];
 
-function buildHarnessPrompt({ mode, category, topic, url, target, tone, length, lang }) { // ✏️ characterGender 제거
+// ✏️ URL 역설계 — YouTube oEmbed 메타데이터 fetch (CORS-free)
+async function fetchYouTubeMeta(url) {
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+    const res = await fetch(oembedUrl);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      title:  data.title       || "",
+      author: data.author_name || "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildHarnessPrompt({ mode, category, topic, url, urlMeta, target, tone, length, lang }) { // ✏️ characterGender 제거
   const cat = CATEGORIES.find((c) => c.id === category) || CATEGORIES[0];
   const toneObj = TONES.find((t) => t.id === tone) || TONES[0];
   const lengthObj = LENGTHS.find((l) => l.id === length) || LENGTHS[0];
+  // ✏️ URL 역설계 — oEmbed 메타데이터 프롬프트 주입
+  const urlMetaStr = urlMeta
+    ? `제목: ${urlMeta.title}\n채널: ${urlMeta.author}`
+    : "(메타데이터 없음 — URL만 참고)";
   const inputContext = mode === "url"
-    ? `### 분석 URL ###\n${url}`
+    ? `### 분석 URL ###\n${url}\n\n### URL 영상 정보 (반드시 반영) ###\n${urlMetaStr}\n\n⚠️ 위 영상 제목과 주제를 대본/기획의 핵심 소재로 사용할 것.\n채널 카테고리 스타일로 재해석하되 원본 주제에서 벗어나지 말 것.`
     : `### 주제/키워드 ###\n${topic}`;
   // ✏️ 6요소 자동 이미지 프롬프트 규칙
   const autoVisualRules = `[이미지 프롬프트 자동 생성 규칙 — 6요소]
@@ -577,38 +597,16 @@ async function exportXLSX(allOutput, config) {
   XLSX.utils.book_append_sheet(wb, wsOv, "📋 주제개요");
 
   allOutput.forEach(({ step, content }) => {
-    // ✏️ STEP 4 비주얼 — 9열 + 시퀀스 세부 행
+    // ✏️ STEP 4 비주얼 — 씬 메인행만 출력 (서브행 제거)
     if (step.id === 4) {
       const blocks = parseVisualBlocks(content);
-      const emptyRow = [null, null, null, null, null, null, null, null, null];
-      const ANGLES = [
-        "wide establishing shot", "medium shot (waist up)", "close-up (face/hands/detail)",
-        "over-the-shoulder shot", "low angle shot", "high angle shot", "extreme close-up (eyes/object detail)",
-      ];
+      const emptyRow = [null, null, null, null, null, null, null, null, null, null];
       const rows = [];
       blocks.forEach((b, blockIdx) => {
-        // ✏️ 씬 메인행 (앞 빈 행 제거 — 씬 사이 간격은 뒤에서 처리)
-        rows.push([b.씬명, b.타임스탬프, b.영어, b.한국어, b.broll, b.자막,
+        // ✏️ 씬 메인행 1개만 출력, 씬명 형식: [씬N: 씬명]
+        rows.push([`[씬${blockIdx + 1}: ${b.씬명}]`, b.타임스탬프, b.영어, b.한국어, b.broll, b.자막,
           b.grokFilename ?? "", b.의미태그 ?? "", b.imageCount ?? "", b.체류시간 ?? ""]);
-        // ✏️ 시퀀스 세부 행 (권장이미지수 2장 이상)
-        const imageCountNum = parseInt(b.imageCount) || 1;
-        if (imageCountNum >= 2) {
-          const sceneNum = String(blockIdx + 1).padStart(2, "0");
-          // ✏️ Claude API 생성 영어 키워드 사용, 실패 시 씬명 기반 폴백
-          const enKeyword = keywordMap[String(blockIdx + 1)] ||
-            (b.씬명 || `scene${sceneNum}`).slice(0, 15).replace(/[^\w]/g, "_");
-          rows.push(emptyRow); // ✏️ 메인행↔첫 서브행 사이 빈 행 1개
-          for (let j = 0; j < imageCountNum; j++) {
-            const seq = String(j + 1).padStart(2, "0");
-            const angle = ANGLES[j] || ANGLES[ANGLES.length - 1];
-            const seqPrompt = `same CHAR reference, same setting, cinematic 16:9, ${angle}, ${b.영어}`;
-            rows.push([`${b.씬명}_${seq}`, b.타임스탬프, seqPrompt, b.한국어, b.broll, b.자막,
-              `scene${sceneNum}_${seq}_${enKeyword}`, b.의미태그 ?? "", `${seq}/${imageCountNum}`, b.체류시간 ?? ""]);
-            if (j < imageCountNum - 1) rows.push(emptyRow); // ✏️ 서브행 사이 빈 행 1개
-          }
-        }
-        // ✏️ 씬 사이 빈 행 2개 (서브행 없는 씬도 동일)
-        rows.push(emptyRow);
+        // ✏️ 씬 사이 빈 행 1개
         rows.push(emptyRow);
       });
       const wsData = [
@@ -645,6 +643,34 @@ async function exportXLSX(allOutput, config) {
     const cleanLine = (line) =>
       line.replace(/^#{1,3}\s*/g, "").replace(/\*\*/g, "").replace(/`/g, "").trimEnd();
 
+    // ✏️ STEP 3 대본 탭 전용 — 씬 소제목 감지 시 B열에 Grok 파일명 삽입
+    if (step.id === 3) {
+      let sceneCounter = 0;
+      const contentRows = (content || "")
+        .split("\n")
+        .map((line) => {
+          const cleaned = cleanLine(line);
+          const sceneMatch = /씬\d*[:\s]/.test(cleaned);
+          if (sceneMatch) {
+            const grokFile = allVisualBlocks[sceneCounter]?.grokFilename ?? "";
+            sceneCounter++;
+            return [cleaned, grokFile];
+          }
+          return [cleaned, null];
+        });
+      const wsData = [
+        [`STEP ${step.id} ${step.emoji} ${step.label}`],
+        [""],
+        ...contentRows,
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws["!cols"] = [{ wch: 80 }, { wch: 25 }];
+      if (ws["A1"]) ws["A1"].s = { font: { bold: true, sz: 12 }, fill: { fgColor: { rgb: "1A1A2E" } } };
+      XLSX.utils.book_append_sheet(wb, ws, `${step.emoji} ${step.label}`);
+      return;
+    }
+
+    // ✏️ step.id !== 3 이면 기존 공통 블록 그대로
     const contentRows = (content || "")
       .split("\n")
       .map((line) => [cleanLine(line)]);
@@ -907,7 +933,18 @@ export default function VibeAppFactory() {
     setAllOutput([]);
     setError("");
 
-    const prompt = buildHarnessPrompt({ mode, category, topic, url, target: target.includes('전체') ? '전체 시청자' : target.join(', '), tone, length, lang }); // ✏️
+    // ✏️ URL 역설계 — 파이프라인 시작 전 YouTube 메타데이터 fetch
+    let urlMeta = null;
+    if (mode === "url" && url.trim()) {
+      setStepOutput("🔍 YouTube 영상 정보 분석 중...");
+      urlMeta = await fetchYouTubeMeta(url.trim());
+      setStepOutput(urlMeta
+        ? `✅ 영상 감지: "${urlMeta.title}" (${urlMeta.author})\n파이프라인 시작...`
+        : "⚠️ 영상 정보 자동 추출 실패 — URL 텍스트만으로 진행합니다."
+      );
+      await new Promise(r => setTimeout(r, 600)); // 사용자 확인 대기
+    }
+    const prompt = buildHarnessPrompt({ mode, category, topic, url, urlMeta, target: target.includes('전체') ? '전체 시청자' : target.join(', '), tone, length, lang }); // ✏️
 
     try {
       for (let i = 0; i < STEPS.length; i++) {
