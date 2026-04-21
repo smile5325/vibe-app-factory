@@ -93,6 +93,7 @@ VideoPrompts_KOR: {영상 연출 지시문 한국어, slow camera pan 등 포함
 VideoPrompts_ENG: {video direction in English, include: slow camera pan, smooth tracking shot, 60fps, subtle movement}
 SFX_KOR: {효과음/배경음 한국어 설명}
 SFX_ENG: {sound effect/ambient description in English}
+Narration_ENG: {English translation of the Korean narration, same emotional tone, natural flow, 2-3 sentences max per scene}
 
 [이미지 프롬프트 5요소 구성 규칙]
 1. 👤 피사체 및 행동: 주피사체/의상/행동(동사형)
@@ -257,6 +258,7 @@ VideoPrompts_KOR: [영상 연출 지시문 한국어]
 VideoPrompts_ENG: [video direction in English]
 SFX_KOR: [효과음/배경음 한국어]
 SFX_ENG: [sound effect/ambient in English]
+Narration_ENG: [English translation of the narration, same tone, 2-3 sentences]
 영어 프롬프트: same character as CHAR reference, cinematic 16:9, [대표 이미지 프롬프트]
 한국어 설명: [한국어 설명]
 B-roll: [키워드1, 키워드2, 키워드3]
@@ -330,6 +332,7 @@ function parseVisualBlocks(text) {
         grokFilename: "", 의미태그: "", imageCount: "", 체류시간: "",
         stage: "", narrationDuration: "", sfx_kor: "", sfx_eng: "",
         videoPrompt_kor: "", videoPrompt_eng: "", imagePrompts_kor: "", imagePrompts_eng: "",
+        narration_eng: "",
       };
     } else if (cur) {
       if      (t.startsWith("타임스탬프:"))        cur.타임스탬프       = t.slice(5).trim();
@@ -350,6 +353,7 @@ function parseVisualBlocks(text) {
       else if (t.startsWith("VideoPrompts_ENG:"))  cur.videoPrompt_eng  = t.slice(17).trim();
       else if (t.startsWith("SFX_KOR:"))           cur.sfx_kor          = t.slice(8).trim();
       else if (t.startsWith("SFX_ENG:"))           cur.sfx_eng          = t.slice(8).trim();
+      else if (t.startsWith("Narration_ENG:"))     cur.narration_eng    = t.slice(14).trim();
     }
   }
   if (cur) blocks.push(cur);
@@ -607,12 +611,10 @@ async function exportXLSX(allOutput, config) {
   const fileName  = `vibeapp_${topicSlug}_${date}.xlsx`;
   const wb        = XLSX.utils.book_new();
 
-  // 씬 키워드 생성 (Grok 파일명용)
   const visualStep4 = allOutput.find(o => o.step.id === 4);
   const allVisualBlocks = visualStep4 ? parseVisualBlocks(visualStep4.content) : [];
   await generateSceneKeywords(allVisualBlocks);
 
-  // STEP 3 나레이션 파싱
   const scriptStep3 = allOutput.find(o => o.step.id === 3);
   const step3Content = scriptStep3?.content || "";
   const narrationMap = parseNarrationByScene(step3Content);
@@ -620,76 +622,179 @@ async function exportXLSX(allOutput, config) {
   const cleanLine = (line) =>
     line.replace(/^#{1,3}\s*/g, "").replace(/\*\*/g, "").replace(/`/g, "").trimEnd();
 
-  // 기승전결 행 배경색
-  const STAGE_COLORS = {
-    "기": "FFF3E0", "Hook": "FFF3E0",
-    "승": "E8F5E9", "Build": "E8F5E9",
-    "전": "E3F2FD", "Climax": "E3F2FD",
-    "결": "F3E5F5", "Outro": "F3E5F5",
+  // ─── 공통 스타일 헬퍼 ────────────────────────────────────────
+  const STAGE_COLORS  = { "기": "FFF3E0", "Hook": "FFF3E0", "승": "E8F5E9", "Build": "E8F5E9", "전": "E3F2FD", "Climax": "E3F2FD", "결": "F3E5F5", "Outro": "F3E5F5" };
+  const STAGE_DARK    = { "기": "FFD699", "Hook": "FFD699", "승": "A8D5B5", "Build": "A8D5B5", "전": "90B8E8", "Climax": "90B8E8", "결": "D5A8E0", "Outro": "D5A8E0" };
+  const getStageColor = (stage = "", dark = false) => {
+    const map = dark ? STAGE_DARK : STAGE_COLORS;
+    for (const [key, color] of Object.entries(map)) { if (stage.includes(key)) return color; }
+    return dark ? "CCCCCC" : "FFFFFF";
   };
-  const getStageColor = (stage = "") => {
-    for (const [key, color] of Object.entries(STAGE_COLORS)) {
-      if (stage.includes(key)) return color;
-    }
-    return "FFFFFF";
+  const mgs = (rgb, bold = false) => ({ fill: { fgColor: { rgb } }, font: { name: "Malgun Gothic", bold } });
+
+  // ─── 공통 데이터 준비 ─────────────────────────────────────────
+  // 4-A: NarrationDuration → 글자수 기반 재계산 (API 값 무시)
+  const getNarDur = (narKor) => {
+    const chars = (narKor || "").replace(/\s/g, "").length;
+    return chars > 0 ? Math.floor(chars / 5.8) : 10;
   };
-  const cell = (v, rgb, bold = false) => ({
-    v: v ?? "", t: typeof v === "number" ? "n" : "s",
-    s: { fill: { fgColor: { rgb } }, font: { name: "Malgun Gothic", bold } },
+
+  // 기승전결 그룹 빌드
+  const stageGroups = { 기: [], 승: [], 전: [], 결: [] };
+  allVisualBlocks.forEach((b, i) => {
+    const pad    = String(i + 1).padStart(2, "0");
+    const narKor = narrationMap[pad] || b.한국어 || "";
+    const entry  = { ...b, sceneNum: pad, narKor, sceneIdx: i };
+    const s = b.stage || "";
+    if      (s.includes("기") || s.includes("Hook"))   stageGroups.기.push(entry);
+    else if (s.includes("승") || s.includes("Build"))  stageGroups.승.push(entry);
+    else if (s.includes("전") || s.includes("Climax")) stageGroups.전.push(entry);
+    else if (s.includes("결") || s.includes("Outro"))  stageGroups.결.push(entry);
+    else stageGroups.기.push(entry); // fallback
   });
 
-  // ─── Tab 1: 📋스토리요약 ─────────────────────────────────────
-  const totalDur = allVisualBlocks.reduce((s, b) => {
-    return s + (parseFloat(b.narrationDuration) || parseFloat(b.체류시간) || 10);
+  // STEP1에서 영상 스타일/나레이션 형식 추출 (없으면 기본값)
+  const step1Content = allOutput.find(o => o.step.id === 1)?.content || "";
+  const visualStyleStr  = (step1Content.match(/시각\s*연출[:\s]+([^\n]+)/) || [])[1]?.trim() || "Cinematic Documentary";
+  const narrFormatStr   = (step1Content.match(/나레이션\s*형식[:\s]+([^\n]+)/) || [])[1]?.trim() || "1인칭 나레이션";
+
+  // 총 예상 시간 (4-A 기준)
+  const totalDurSec = allVisualBlocks.reduce((sum, b, i) => {
+    const pad    = String(i + 1).padStart(2, "0");
+    const narKor = narrationMap[pad] || b.한국어 || "";
+    return sum + getNarDur(narKor);
   }, 0);
-  const stageCnt = { 기: 0, 승: 0, 전: 0, 결: 0 };
-  allVisualBlocks.forEach(b => {
-    const s = b.stage || "";
-    if (s.includes("기") || s.includes("Hook"))   stageCnt.기++;
-    else if (s.includes("승") || s.includes("Build")) stageCnt.승++;
-    else if (s.includes("전") || s.includes("Climax")) stageCnt.전++;
-    else if (s.includes("결") || s.includes("Outro"))  stageCnt.결++;
+  const totalMins = Math.floor(totalDurSec / 60);
+  const totalSecs = totalDurSec % 60;
+
+  // 첫 2문장 (DAILY 요약)
+  const firstNar       = Object.values(narrationMap)[0] || allVisualBlocks[0]?.한국어 || "";
+  const dailySummary   = firstNar.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ") || firstNar.slice(0, 80);
+
+  // 각 stage 첫 씬 나레이션 1문장
+  const stageSummary = {};
+  ["기", "승", "전", "결"].forEach(stg => {
+    const e = stageGroups[stg][0];
+    if (e) stageSummary[stg] = (e.narKor.split(/(?<=[.!?])\s+/)[0] || e.narKor.slice(0, 60)).trim();
+    else   stageSummary[stg] = "";
   });
-  const ws1Data = [
-    ["📋 스토리 요약", null],
-    [null, null],
-    ["항목", "설정값"],
-    ["콘텐츠 모드",    mode === "url" ? "URL 역설계 모드" : "주제 직접 입력 모드"],
-    ["채널 카테고리",  cat.label || category],
-    ["주제 / 키워드",  topic || url || ""],
-    ["타겟 독자",      target],
-    ["톤 / 스타일",    `${toneObj.emoji || ""} ${toneObj.label || tone}`],
-    ["영상 길이",      `${lengthObj.label || length}${lengthObj.sub ? ` (${lengthObj.sub})` : ""}`],
-    ["언어",           lang],
-    [null, null],
-    ["총 씬 수",        allVisualBlocks.length],
-    ["총 예상 시간(초)", Math.round(totalDur)],
-    ["총 예상 시간(분)", (totalDur / 60).toFixed(1)],
-    [null, null],
-    ["기(Hook) 씬 수",     stageCnt.기],
-    ["승(Build-up) 씬 수", stageCnt.승],
-    ["전(Climax) 씬 수",   stageCnt.전],
-    ["결(Outro) 씬 수",    stageCnt.결],
-    [null, null],
-    ["생성 일시", new Date().toLocaleString("ko-KR")],
-    ["파일명",    fileName],
+
+  const STAGE_ORDER = [
+    { key: "기", label: "기 (Hook)" },
+    { key: "승", label: "승 (Build-up)" },
+    { key: "전", label: "전 (Climax)" },
+    { key: "결", label: "결 (Outro)" },
   ];
-  const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
-  ws1["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
-  ws1["!cols"] = [{ wch: 22 }, { wch: 44 }];
-  if (ws1["A1"]) ws1["A1"].s = { fill: { fgColor: { rgb: "C0392B" } }, font: { name: "Malgun Gothic", bold: true, color: { rgb: "FFFFFF" }, sz: 13 } };
+
+  // ─── Tab 1: 📋스토리요약 ─────────────────────────────────────
+  const ws1Rows = [];
+  const titleStr = `📺 ${topic || url || "콘텐츠"} — 스토리텔링 대본 요약`;
+
+  // 섹션 A
+  ws1Rows.push([titleStr]);
+  ws1Rows.push([""]);
+
+  // 섹션 B
+  ws1Rows.push(["■ 프로젝트 요약"]);
+  ws1Rows.push([`주제: ${topic || url || ""}`]);
+  ws1Rows.push([`총 씬 수: ${allVisualBlocks.length}개`]);
+  ws1Rows.push([`예상 러닝타임: 약 ${totalMins}분 ${totalSecs}초`]);
+  ws1Rows.push([`스토리 구조: 기(Hook) → 승(Build-up) → 전(Climax) → 결(Outro)`]);
+  ws1Rows.push([`나레이션 형식: ${narrFormatStr}`]);
+  ws1Rows.push([`영상 스타일: ${visualStyleStr}`]);
+  ws1Rows.push([""]);
+
+  // 섹션 C
+  ws1Rows.push(["■ 전체 스토리 임팩트 요약"]);
+  ws1Rows.push([`[DAILY]: ${dailySummary}`]);
+  ws1Rows.push([`기(Hook): ${stageSummary.기}`]);
+  ws1Rows.push([`승(Build-up): ${stageSummary.승}`]);
+  ws1Rows.push([`전(Climax): ${stageSummary.전}`]);
+  ws1Rows.push([`결(Outro): ${stageSummary.결}`]);
+  ws1Rows.push([""]);
+
+  // 섹션 D — 기승전결 씬별 요약 테이블
+  ws1Rows.push(["■ 기승전결 씬별 요약"]);
+  const tblHeaderRow = ws1Rows.length;
+  ws1Rows.push(["씬", "Stage", "장소", "나레이션 요약"]);
+  // 섹션 헤더행 row index 기록용
+  const sectionHeaderRows = [];
+  const stageDataRows = {}; // stage → [rowIdx, ...]
+
+  STAGE_ORDER.forEach(({ key, label }) => {
+    const scenes = stageGroups[key];
+    if (!scenes.length) return;
+    const secIdx = ws1Rows.length;
+    sectionHeaderRows.push({ rowIdx: secIdx, key });
+    ws1Rows.push([`${label} — ${scenes[0].씬명}`, "", "", ""]);
+    stageDataRows[key] = [];
+    scenes.forEach(e => {
+      const narSum = (e.narKor.split(/(?<=[.!?])\s+/)[0] || e.narKor.slice(0, 70)).trim();
+      stageDataRows[key].push(ws1Rows.length);
+      ws1Rows.push([e.sceneNum, e.stage || key, `[SCENE ${e.sceneNum}: ${e.씬명}]`, narSum]);
+    });
+  });
+
+  const ws1 = XLSX.utils.aoa_to_sheet(ws1Rows);
+  ws1["!cols"] = [{ wch: 8 }, { wch: 14 }, { wch: 28 }, { wch: 70 }];
+  // A1 타이틀 스타일
+  if (ws1["A1"]) ws1["A1"].s = mgs("C0392B", true);
+  // 섹션 헤더행 스타일 (어두운 색)
+  sectionHeaderRows.forEach(({ rowIdx, key }) => {
+    ["A","B","C","D"].forEach(col => {
+      const ref = `${col}${rowIdx + 1}`;
+      if (ws1[ref]) ws1[ref].s = mgs(getStageColor(key, true), true);
+      else ws1[ref] = { v: "", t: "s", s: mgs(getStageColor(key, true), true) };
+    });
+  });
+  // 데이터 행 스타일
+  Object.entries(stageDataRows).forEach(([key, rowIdxArr]) => {
+    rowIdxArr.forEach(rowIdx => {
+      ["A","B","C","D"].forEach(col => {
+        const ref = `${col}${rowIdx + 1}`;
+        if (ws1[ref]) ws1[ref].s = mgs(getStageColor(key), false);
+      });
+    });
+  });
   XLSX.utils.book_append_sheet(wb, ws1, "📋스토리요약");
 
   // ─── Tab 2: 📖전체스토리텔링대본 ────────────────────────────
-  const scriptLines = step3Content.split("\n").map(l => [cleanLine(l)]);
-  const ws2Data = [
-    ["📖 전체 스토리텔링 대본"],
-    [""],
-    ...scriptLines,
-  ];
-  const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
-  ws2["!cols"] = [{ wch: 100 }];
-  if (ws2["A1"]) ws2["A1"].s = { fill: { fgColor: { rgb: "6B7A1E" } }, font: { name: "Malgun Gothic", bold: true, color: { rgb: "FFFFFF" }, sz: 13 } };
+  const ws2Rows = [];
+  ws2Rows.push([`📖 ${topic || url || "콘텐츠"} — 전체 스토리텔링 대본`]);
+  ws2Rows.push([""]);
+
+  const ws2StageRows = {}; // stage → [rowIdx, ...]
+  STAGE_ORDER.forEach(({ key, label }) => {
+    const scenes = stageGroups[key];
+    if (!scenes.length) return;
+    const hdrIdx = ws2Rows.length;
+    if (!ws2StageRows[key]) ws2StageRows[key] = { header: hdrIdx, scenes: [] };
+    ws2Rows.push([`🎯 ${label} — ${scenes[0].씬명}`]);
+    ws2Rows.push([""]);
+    scenes.forEach(e => {
+      const sceneHdrIdx = ws2Rows.length;
+      ws2StageRows[key].scenes.push({ sceneHdr: sceneHdrIdx, narIdx: sceneHdrIdx + 1 });
+      ws2Rows.push([`  ♟ ${e.씬명}`]);
+      ws2Rows.push([`  ${e.narKor}`]);
+      ws2Rows.push([""]);
+    });
+  });
+
+  const ws2 = XLSX.utils.aoa_to_sheet(ws2Rows);
+  ws2["!cols"] = [{ wch: 110 }];
+  if (ws2["A1"]) ws2["A1"].s = mgs("6B7A1E", true);
+  // 행 색상 적용
+  Object.entries(ws2StageRows).forEach(([key, { header, scenes: sArr }]) => {
+    const dark  = mgs(getStageColor(key, true), true);
+    const light = mgs(getStageColor(key), false);
+    const bold  = mgs(getStageColor(key), true);
+    const ref = (r) => `A${r + 1}`;
+    if (ws2[ref(header)]) ws2[ref(header)].s = dark;
+    sArr.forEach(({ sceneHdr, narIdx }) => {
+      if (ws2[ref(sceneHdr)]) ws2[ref(sceneHdr)].s = bold;
+      if (ws2[ref(narIdx)])   ws2[ref(narIdx)].s   = light;
+    });
+  });
   XLSX.utils.book_append_sheet(wb, ws2, "📖전체스토리텔링대본");
 
   // ─── Tab 3: 🎬스토리보드 ────────────────────────────────────
@@ -704,15 +809,16 @@ async function exportXLSX(allOutput, config) {
   const sbRows = allVisualBlocks.map((b, i) => {
     const pad     = String(i + 1).padStart(2, "0");
     const place   = `[SCENE ${pad}: ${b.씬명}]`;
-    const narDur  = parseFloat(b.narrationDuration) || parseFloat(b.체류시간) || 10;
+    const narKor  = narrationMap[pad] || b.한국어 || "";
+    // 4-A: 글자수 기반 재계산
+    const narDur  = getNarDur(narKor);
     const imgCnt  = Math.ceil(narDur / 10);
     const imgCov  = imgCnt * 10;
     const syncGap = imgCov - narDur;
-    const narKor  = narrationMap[pad] || b.한국어 || "";
     return [
       i + 1, b.stage || "", place,
       narDur, imgCnt, imgCov, syncGap,
-      narKor, "",
+      narKor, b.narration_eng || "",
       b.sfx_kor || "", b.sfx_eng || "",
       b.imagePrompts_kor || "", b.imagePrompts_eng || b.영어 || "",
       b.videoPrompt_kor || "", b.videoPrompt_eng || "",
@@ -720,17 +826,16 @@ async function exportXLSX(allOutput, config) {
   });
   const ws3Data = [sbHeader, ...sbRows];
   const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
-  // 행 색상 + SyncGap 빨강 강조
   sbRows.forEach((row, i) => {
-    const rowIdx = i + 1;
+    const rowIdx     = i + 1;
     const stageColor = getStageColor(allVisualBlocks[i]?.stage || "");
     row.forEach((_, colIdx) => {
       const ref = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
       if (!ws3[ref]) return;
       if (colIdx === 6 && Math.abs(parseFloat(ws3[ref].v) || 0) > 5) {
-        ws3[ref].s = { fill: { fgColor: { rgb: "FF0000" } }, font: { name: "Malgun Gothic" } };
+        ws3[ref].s = mgs("FF0000");
       } else {
-        ws3[ref].s = { fill: { fgColor: { rgb: stageColor } }, font: { name: "Malgun Gothic" } };
+        ws3[ref].s = mgs(stageColor);
       }
     });
   });
@@ -742,29 +847,40 @@ async function exportXLSX(allOutput, config) {
     { wch: 54 }, { wch: 54 },
     { wch: 32 }, { wch: 32 },
   ];
-  if (ws3["A1"]) ws3["A1"].s = { fill: { fgColor: { rgb: "1A237E" } }, font: { name: "Malgun Gothic", bold: true, color: { rgb: "FFFFFF" } } };
+  if (ws3["A1"]) ws3["A1"].s = mgs("1A237E", true);
   XLSX.utils.book_append_sheet(wb, ws3, "🎬스토리보드");
 
-  // ─── Tab 4: 📤Grok프롬프트출력 ─────────────────────────────
-  const grokHeader = ["#", "씬명", "ImagePrompts (ENG)", "Grok 파일명"];
-  const grokRows = [];
+  // ─── Tab 4: 📤Gmini프롬프트출력 (1컷 1행) ──────────────────
+  const gminiHeader = ["#", "씬번호", "씬명", "컷번호", "ImagePrompts (ENG)", "Grok 파일명"];
+  const gminiRows = [];
+  let cutRowNum = 1;
   allVisualBlocks.forEach((b, i) => {
-    grokRows.push([i + 1, b.씬명, b.imagePrompts_eng || b.영어 || "", b.grokFilename || ""]);
-    grokRows.push([null, null, null, null]);
+    const pad        = String(i + 1).padStart(2, "0");
+    const sceneName  = `[SCENE ${pad}: ${b.씬명}]`;
+    const rawPrompts = b.imagePrompts_eng || b.영어 || "";
+    // " | " 또는 "|" 기준 컷 분리
+    const cuts = rawPrompts.split(/\s*\|\s*/).filter(c => c.trim());
+    if (!cuts.length) cuts.push(rawPrompts);
+    cuts.forEach((cut, ci) => {
+      const cutLabel = `Cut${ci + 1}`;
+      const grokName = `${b.grokFilename || `scene${pad}`}_cut${ci + 1}`;
+      gminiRows.push([cutRowNum++, pad, sceneName, cutLabel, cut.trim(), grokName]);
+    });
+    gminiRows.push([null, null, null, null, null, null]); // 씬 간 빈행
   });
-  const ws4Data = [grokHeader, ...grokRows];
+  const ws4Data = [gminiHeader, ...gminiRows];
   const ws4 = XLSX.utils.aoa_to_sheet(ws4Data);
-  ws4["!cols"] = [{ wch: 4 }, { wch: 22 }, { wch: 64 }, { wch: 26 }];
-  if (ws4["A1"]) ws4["A1"].s = { fill: { fgColor: { rgb: "1B5E20" } }, font: { name: "Malgun Gothic", bold: true, color: { rgb: "FFFFFF" } } };
-  XLSX.utils.book_append_sheet(wb, ws4, "📤Grok프롬프트출력");
+  ws4["!cols"] = [{ wch: 5 }, { wch: 8 }, { wch: 22 }, { wch: 8 }, { wch: 70 }, { wch: 28 }];
+  if (ws4["A1"]) ws4["A1"].s = mgs("1B5E20", true);
+  XLSX.utils.book_append_sheet(wb, ws4, "📤Gmini프롬프트출력");
 
   // 탭 색상 설정
   wb.Workbook = {
     Sheets: [
-      { name: "📋스토리요약",         TabColor: { rgb: "C0392B" } },
-      { name: "📖전체스토리텔링대본",  TabColor: { rgb: "6B7A1E" } },
-      { name: "🎬스토리보드",          TabColor: { rgb: "1A237E" } },
-      { name: "📤Grok프롬프트출력",    TabColor: { rgb: "1B5E20" } },
+      { name: "📋스토리요약",          TabColor: { rgb: "C0392B" } },
+      { name: "📖전체스토리텔링대본",   TabColor: { rgb: "6B7A1E" } },
+      { name: "🎬스토리보드",           TabColor: { rgb: "1A237E" } },
+      { name: "📤Gmini프롬프트출력",    TabColor: { rgb: "1B5E20" } },
     ],
   };
 
@@ -1041,7 +1157,7 @@ export default function VibeAppFactory() {
 
 지금 STEP ${step.id} / 7 ${step.emoji} ${step.label} 부분만 완성 출력하세요.
 다른 STEP은 출력하지 마세요. 실제 사용 가능한 완성 콘텐츠로 작성하세요.
-STEP 4(비주얼)는 씬명:/Stage:/타임스탬프:/NarrationDuration:/ImageCount:/Grok 파일명:/의미태그:/체류시간(초):/ImagePrompts_KOR:/ImagePrompts_ENG:/VideoPrompts_KOR:/VideoPrompts_ENG:/SFX_KOR:/SFX_ENG:/영어 프롬프트:/한국어 설명:/B-roll:/자막: 형식 엄수.
+STEP 4(비주얼)는 씬명:/Stage:/타임스탬프:/NarrationDuration:/ImageCount:/Grok 파일명:/의미태그:/체류시간(초):/ImagePrompts_KOR:/ImagePrompts_ENG:/VideoPrompts_KOR:/VideoPrompts_ENG:/SFX_KOR:/SFX_ENG:/Narration_ENG:/영어 프롬프트:/한국어 설명:/B-roll:/자막: 형식 엄수.
 STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스트 오버레이:/색상 조합: 형식 엄수.${step.id === 4 ? scriptRef : ""}`;
 
         // ✏️ STEP별 max_tokens 차등 — 대본(STEP 3)은 길이에 따라 최대 8000
