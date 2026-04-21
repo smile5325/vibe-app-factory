@@ -106,7 +106,13 @@ Narration_ENG: {English translation of the Korean narration, same emotional tone
 - 앞 20%: 기(Hook)
 - 20~60%: 승(Build-up)
 - 60~85%: 전(Climax)
-- 85~100%: 결(Outro)`;
+- 85~100%: 결(Outro)
+
+[씬 완전 출력 필수 규칙]
+모든 씬을 빠짐없이 출력할 것.
+응답이 길어지더라도 마지막 씬까지 완전히 출력.
+절대 중간에 생략하거나 요약하지 말 것.
+"이하 생략", "..." 등의 표현 사용 금지.`;
 
   // ✏️ script_length_master — 영상 길이별 분량 타겟
   const scriptTarget = {
@@ -798,6 +804,28 @@ async function exportXLSX(allOutput, config) {
   XLSX.utils.book_append_sheet(wb, ws2, "📖전체스토리텔링대본");
 
   // ─── Tab 3: 🎬스토리보드 ────────────────────────────────────
+  // STEP5 썸네일 "안: 1" 추출
+  const thumbStep5 = allOutput.find(o => o.step.id === 5);
+  const thumbBlocks = thumbStep5 ? parseThumbnailBlocks(thumbStep5.content) : [];
+  const thumb1 = thumbBlocks.find(b => b.안 === "1") || thumbBlocks[0] || {};
+  const thumbKor = thumb1.한국어 || "";
+  const thumbEng = thumb1.영어  || "";
+
+  const sbColCount = 15;
+  const blank15 = () => Array(sbColCount).fill(null);
+  const sbTitleStr = `📺 ${topic || url || "콘텐츠"} — 스토리보드`;
+
+  // 상단 6행
+  const sbTopRows = [
+    [sbTitleStr, ...Array(sbColCount - 1).fill(null)],  // 행1: 제목 병합
+    blank15(),                                            // 행2: 빈행
+    ["■ 썸네일 프롬프트", ...Array(sbColCount - 1).fill(null)], // 행3
+    ["KOR", thumbKor, ...Array(sbColCount - 2).fill(null)],     // 행4
+    ["ENG", thumbEng, ...Array(sbColCount - 2).fill(null)],     // 행5
+    blank15(),                                            // 행6: 빈행
+  ];
+  const SB_TOP = sbTopRows.length; // 6
+
   const sbHeader = [
     "#", "Stage", "Place",
     "NarrationDuration (sec)", "ImageCount", "ImageCover (sec)", "SyncGap (sec)",
@@ -810,7 +838,6 @@ async function exportXLSX(allOutput, config) {
     const pad     = String(i + 1).padStart(2, "0");
     const place   = `[SCENE ${pad}: ${b.씬명}]`;
     const narKor  = narrationMap[pad] || b.한국어 || "";
-    // 4-A: 글자수 기반 재계산
     const narDur  = getNarDur(narKor);
     const imgCnt  = Math.ceil(narDur / 10);
     const imgCov  = imgCnt * 10;
@@ -824,10 +851,17 @@ async function exportXLSX(allOutput, config) {
       b.videoPrompt_kor || "", b.videoPrompt_eng || "",
     ];
   });
-  const ws3Data = [sbHeader, ...sbRows];
+  const ws3Data = [...sbTopRows, sbHeader, ...sbRows];
   const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
+  // 제목행 병합 (행1: A1~O1)
+  ws3["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: sbColCount - 1 } }];
+  // 상단 행 스타일
+  if (ws3["A1"]) ws3["A1"].s = mgs("1A237E", true);
+  const a3ref = XLSX.utils.encode_cell({ r: 2, c: 0 });
+  if (ws3[a3ref]) ws3[a3ref].s = mgs("D0D8F8", true);
+  // 데이터 행 스타일 (SB_TOP + 1 = sbHeader, SB_TOP + 1 + i = data)
   sbRows.forEach((row, i) => {
-    const rowIdx     = i + 1;
+    const rowIdx     = SB_TOP + 1 + i;
     const stageColor = getStageColor(allVisualBlocks[i]?.stage || "");
     row.forEach((_, colIdx) => {
       const ref = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
@@ -847,7 +881,6 @@ async function exportXLSX(allOutput, config) {
     { wch: 54 }, { wch: 54 },
     { wch: 32 }, { wch: 32 },
   ];
-  if (ws3["A1"]) ws3["A1"].s = mgs("1A237E", true);
   XLSX.utils.book_append_sheet(wb, ws3, "🎬스토리보드");
 
   // ─── Tab 4: 📤Gmini프롬프트출력 (1컷 1행) ──────────────────
@@ -1151,6 +1184,12 @@ export default function VibeAppFactory() {
 
         // ✏️ STEP 4 대사 기반 이미지 연동 — STEP 3 대본 참조
         const scriptOutput = allOutput.find(o => o.step.id === 3)?.content || "";
+        const sceneCountInScript = step.id === 4
+          ? (scriptOutput.match(/\[SCENE\s+\d+/g) || []).length
+          : 0;
+        const sceneCountNote = sceneCountInScript > 0
+          ? `\n\n⚠️ 총 ${sceneCountInScript}개 씬 전체를 반드시 모두 출력하시오. 마지막 씬까지 빠짐없이 완전히 출력.`
+          : "";
         const scriptRef = scriptOutput ? `\n\n[STEP 3 대본 참조 — 반드시 아래 대사 기준으로 이미지 프롬프트 생성]\n${scriptOutput.slice(0, 3000)}` : "";
 
         const userPrompt = `${prompt}
@@ -1158,13 +1197,13 @@ export default function VibeAppFactory() {
 지금 STEP ${step.id} / 7 ${step.emoji} ${step.label} 부분만 완성 출력하세요.
 다른 STEP은 출력하지 마세요. 실제 사용 가능한 완성 콘텐츠로 작성하세요.
 STEP 4(비주얼)는 씬명:/Stage:/타임스탬프:/NarrationDuration:/ImageCount:/Grok 파일명:/의미태그:/체류시간(초):/ImagePrompts_KOR:/ImagePrompts_ENG:/VideoPrompts_KOR:/VideoPrompts_ENG:/SFX_KOR:/SFX_ENG:/Narration_ENG:/영어 프롬프트:/한국어 설명:/B-roll:/자막: 형식 엄수.
-STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스트 오버레이:/색상 조합: 형식 엄수.${step.id === 4 ? scriptRef : ""}`;
+STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스트 오버레이:/색상 조합: 형식 엄수.${step.id === 4 ? sceneCountNote + scriptRef : ""}`;
 
         // ✏️ STEP별 max_tokens 차등 — 대본(STEP 3)은 길이에 따라 최대 8000
         const scriptTokens = { short: 2000, mid: 8000, long30: 16000, long60: 16000 }; // ✏️
         const stepMaxTokens = step.id === 3
           ? (scriptTokens[length] || 6000)
-          : step.id === 4 ? 4000
+          : step.id === 4 ? 6000
           : 2000;
 
         const res = await fetch("/api/claude", {
