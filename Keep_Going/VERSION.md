@@ -43,7 +43,7 @@
   - Before: 폴더 중복(`LinkedM\LinkedM\`) 및 category 유실 시 무방어
   - After:  safeCategory 방어처리, rootHandle.name 검증으로 폴더 중복 방지, 저장 직전 console.log 추가
 **관련 에러:** 파일명 URL 슬러그 버그, 저장 폴더 중복 버그
-**배포 상태:** 🔧 로컬
+**배포 상태:** ✅ 배포 완료 (e79fad0)
 
 #### v1.4.1 | 2026-04-21
 **변경 유형:** Patch
