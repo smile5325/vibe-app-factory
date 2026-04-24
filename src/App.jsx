@@ -1121,11 +1121,46 @@ export default function VibeAppFactory() {
   const [urlMeta,          setUrlMeta]          = useState(null); // ✏️ URL 역설계 시 영상 제목 보존
 
   // ✏️ 이미지 생성 상태
-  const [imgStatus,        setImgStatus]        = useState("idle"); // idle | loading | done | error
-  const [imgProgress,      setImgProgress]      = useState({ message: "", current: 0, total: 0 });
-  const [imgResult,        setImgResult]        = useState(null);
-  const [imgError,         setImgError]         = useState("");
-  const imgFileRef = useRef(null);
+  const [imgStatus,   setImgStatus]   = useState('idle');
+  const [imgMessages, setImgMessages] = useState([]);
+  const [imgResults,  setImgResults]  = useState([]);
+  const xlsxInputRef = useRef(null);
+
+  const handleImageGenClick = async () => {
+    const health = await checkBridgeHealth();
+    if (!health.ok) {
+      setImgStatus('error');
+      setImgMessages(["⚠️ 브릿지 서버를 먼저 실행해주세요 (localhost:8000)"]);
+      return;
+    }
+    xlsxInputRef.current?.click();
+  };
+
+  const handleXlsxSelected = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.xlsx')) {
+      setImgStatus('error');
+      setImgMessages(["XLSX 파일을 선택해주세요"]);
+      return;
+    }
+    setImgStatus('running');
+    setImgMessages([]);
+    setImgResults([]);
+    e.target.value = '';
+    try {
+      const result = await generateImages(file, ({ step, message }) => {
+        setImgMessages(prev =>
+          step === 'analyzing' ? [message] : [...prev, message]
+        );
+      });
+      setImgResults(result.results ?? []);
+      setImgStatus('done');
+    } catch (err) {
+      setImgStatus('error');
+      setImgMessages(prev => [...prev, err.message]);
+    }
+  };
 
   const outputRef = useRef(null);
 
@@ -1610,103 +1645,76 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
               </div>
             </div>
 
-            {/* ✏️ 파이프라인 버튼 2분할: 이미지 생성 + 영상 생성 */}
-            <div style={{ display: "flex", gap: 10 }}>
-              {/* 🎨 이미지 생성 버튼 */}
-              <button
-                onClick={() => imgFileRef.current?.click()}
-                disabled={imgStatus === "loading"}
-                style={{
-                  flex: 1, padding: "16px 0", borderRadius: 14, fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
-                  background: imgStatus === "loading"
-                    ? "rgba(255,255,255,0.05)"
-                    : "linear-gradient(135deg,rgba(56,139,255,0.9),rgba(120,80,255,0.9))",
-                  border: "1px solid rgba(120,80,255,0.4)",
-                  color: imgStatus === "loading" ? "#555" : "#fff",
-                  cursor: imgStatus === "loading" ? "not-allowed" : "pointer",
-                  transition: "all 0.2s",
-                }}
-              >
-                {imgStatus === "loading" ? "⏳ 생성 중..." : "🎨 이미지 생성"}
-              </button>
-
-              {/* hidden file input */}
+            {/* ✏️ 버튼 영역: 이미지 생성 + 영상 생성 */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '24px' }}>
               <input
-                ref={imgFileRef}
+                ref={xlsxInputRef}
                 type="file"
                 accept=".xlsx"
-                style={{ display: "none" }}
-                onChange={(e) => { handleImageGenerate(e.target.files?.[0]); e.target.value = ""; }}
+                style={{ display: 'none' }}
+                onChange={handleXlsxSelected}
               />
-
-              {/* 🎬 영상 생성 버튼 (비활성) */}
-              <div style={{ flex: 1, position: "relative" }} title="준비 중입니다">
-                <button
-                  disabled
-                  style={{
-                    width: "100%", padding: "16px 0", borderRadius: 14, fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    color: "#444", cursor: "not-allowed",
-                  }}
-                >
-                  🎬 영상 생성
-                </button>
-              </div>
+              <button
+                onClick={handleImageGenClick}
+                disabled={imgStatus === 'running'}
+                style={{
+                  padding: '12px 28px', fontSize: '15px', fontWeight: 'bold',
+                  borderRadius: '8px', border: 'none',
+                  cursor: imgStatus === 'running' ? 'not-allowed' : 'pointer',
+                  background: imgStatus === 'running' ? '#888' : '#4F46E5',
+                  color: '#fff', transition: 'background 0.2s',
+                }}
+              >
+                {imgStatus === 'running' ? '⏳ 생성 중...' : '🎨 이미지 생성'}
+              </button>
+              <button
+                title="준비 중입니다"
+                disabled
+                style={{
+                  padding: '12px 28px', fontSize: '15px', fontWeight: 'bold',
+                  borderRadius: '8px', border: 'none',
+                  cursor: 'not-allowed', background: '#ccc', color: '#888',
+                }}
+              >
+                🎬 영상 생성
+              </button>
             </div>
 
-            {/* 🎨 이미지 생성 진행 상태 */}
-            {imgStatus !== "idle" && (
-              <div style={{ background: "rgba(56,139,255,0.07)", border: "1px solid rgba(56,139,255,0.2)", borderRadius: 12, padding: "14px 16px", marginTop: 4 }}>
-                {imgStatus === "loading" && (
-                  <div style={{ fontSize: 12, color: "#88b8ff", lineHeight: 1.8 }}>
-                    {imgProgress.message || "처리 중..."}
-                    {imgProgress.total > 0 && (
-                      <span style={{ marginLeft: 8, color: "#aaa" }}>({imgProgress.current}/{imgProgress.total})</span>
-                    )}
-                  </div>
-                )}
-                {imgStatus === "error" && (
-                  <div style={{ fontSize: 12, color: "#ff8888" }}>{imgError}</div>
-                )}
-                {imgStatus === "done" && imgResult && (
-                  <div style={{ fontSize: 12, lineHeight: 1.9 }}>
-                    <div style={{ color: "#7fffb0", fontWeight: 700, marginBottom: 4 }}>
-                      ✅ 완료: {imgResult.success}/{imgResult.total}장 저장됨
-                    </div>
-                    <div style={{ color: "#aaa", marginBottom: 8 }}>
-                      📁 {imgResult.save_dir}
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {imgResult.results?.map((r) => (
-                        <span
-                          key={r.scene}
-                          title={r.error || r.prompt_preview}
-                          style={{
-                            padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                            background: r.status === "✅" ? "rgba(0,200,100,0.15)" : "rgba(255,80,80,0.15)",
-                            color: r.status === "✅" ? "#7fffb0" : "#ff8888",
-                            border: `1px solid ${r.status === "✅" ? "rgba(0,200,100,0.3)" : "rgba(255,80,80,0.3)"}`,
-                          }}
-                        >
-                          {r.scene} {r.status}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+            {imgMessages.length > 0 && (
+              <div style={{
+                marginTop: '16px', padding: '12px 16px', borderRadius: '8px',
+                background: imgStatus === 'error' ? '#FEF2F2' : '#F0FDF4',
+                border: `1px solid ${imgStatus === 'error' ? '#FCA5A5' : '#86EFAC'}`,
+                fontSize: '14px', lineHeight: '1.8',
+              }}>
+                {imgMessages.map((msg, i) => <div key={i}>{msg}</div>)}
               </div>
             )}
 
-            {/* 기존 7-Step 파이프라인 버튼 (숨김 처리 아닌 별도 영역) */}
-            <button onClick={runPipeline} disabled={!canStart} style={{
+            {imgResults.length > 0 && (
+              <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {imgResults.map((r, i) => (
+                  <span key={i} title={r.prompt_preview} style={{
+                    padding: '4px 10px', borderRadius: '20px', fontSize: '13px',
+                    background: r.status === '✅' ? '#DCFCE7' : '#FEE2E2',
+                    color:      r.status === '✅' ? '#166534' : '#991B1B',
+                    border:     `1px solid ${r.status === '✅' ? '#86EFAC' : '#FCA5A5'}`,
+                  }}>
+                    {r.scene} {r.status}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* 기존 7-Step 파이프라인 버튼 (보존) */}
+            {/* <button onClick={runPipeline} disabled={!canStart} style={{
               width: "100%", padding: "14px 0", borderRadius: 14, fontSize: 13, fontWeight: 700, letterSpacing: 1,
               background: canStart ? "linear-gradient(135deg,rgba(120,80,255,0.9),rgba(168,85,247,0.9))" : "rgba(255,255,255,0.05)",
               border: canStart ? "1px solid rgba(120,80,255,0.5)" : "1px solid rgba(255,255,255,0.08)",
               color: canStart ? "#fff" : "#444", cursor: canStart ? "pointer" : "not-allowed", transition: "all 0.2s",
             }}>
               🚀 7-Step 파이프라인 시작
-            </button>
+            </button> */}
           </div>
         )}
 
