@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { generateImages, checkBridgeHealth } from "./services/gemsApi.js";
+import { generateImages, generateImagesByPath, checkBridgeHealth } from "./services/gemsApi.js";
 
 const CATEGORIES = [
   { id: "finance",       label: "재테크·투자",   dot: "#7F77DD", hot: true,  persona: "재테크 전문가",     niches: ["주식·ETF", "부동산", "크립토·Web3", "경제 뉴스 해설", "부업·수익화", "세금·절세"] },
@@ -1124,32 +1124,24 @@ export default function VibeAppFactory() {
   const [imgStatus,   setImgStatus]   = useState('idle');
   const [imgMessages, setImgMessages] = useState([]);
   const [imgResults,  setImgResults]  = useState([]);
-  const xlsxInputRef = useRef(null);
 
-  const handleImageGenClick = async () => {
-    const health = await checkBridgeHealth();
-    if (!health.ok) {
+  // ✏️ 저장완료 화면에서 XLSX 경로 자동 추출 후 이미지 생성
+  const handleImageGenFromSave = async () => {
+    if (!saveMsg) return;
+    const lines = saveMsg.split('\n');
+    const pathLine = lines[1]?.trim();
+    const xlsxLine = lines[3]?.replace('📊 ', '').trim();
+    if (!pathLine || !xlsxLine) {
       setImgStatus('error');
-      setImgMessages(["⚠️ 브릿지 서버를 먼저 실행해주세요 (localhost:8000)"]);
+      setImgMessages(["❌ 저장 경로를 찾을 수 없습니다"]);
       return;
     }
-    xlsxInputRef.current?.click();
-  };
-
-  const handleXlsxSelected = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.name.endsWith('.xlsx')) {
-      setImgStatus('error');
-      setImgMessages(["XLSX 파일을 선택해주세요"]);
-      return;
-    }
+    const fullXlsxPath = `${pathLine}\\${xlsxLine}`;
     setImgStatus('running');
     setImgMessages([]);
     setImgResults([]);
-    e.target.value = '';
     try {
-      const result = await generateImages(file, ({ step, message }) => {
+      const result = await generateImagesByPath(fullXlsxPath, ({ step, message }) => {
         setImgMessages(prev =>
           step === 'analyzing' ? [message] : [...prev, message]
         );
@@ -1655,66 +1647,6 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
               🚀 7-Step 파이프라인 시작
             </button>
 
-            {/* 2행: 🎨 이미지 생성 + 🎬 영상 생성 버튼 */}
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '8px' }}>
-              <input
-                ref={xlsxInputRef}
-                type="file"
-                accept=".xlsx"
-                style={{ display: 'none' }}
-                onChange={handleXlsxSelected}
-              />
-              <button
-                onClick={handleImageGenClick}
-                disabled={imgStatus === 'running'}
-                style={{
-                  padding: '12px 28px', fontSize: '15px', fontWeight: 'bold',
-                  borderRadius: '8px', border: 'none',
-                  cursor: imgStatus === 'running' ? 'not-allowed' : 'pointer',
-                  background: imgStatus === 'running' ? '#888' : '#4F46E5',
-                  color: '#fff', transition: 'background 0.2s',
-                }}
-              >
-                {imgStatus === 'running' ? '⏳ 생성 중...' : '🎨 이미지 생성'}
-              </button>
-              <button
-                title="준비 중입니다"
-                disabled
-                style={{
-                  padding: '12px 28px', fontSize: '15px', fontWeight: 'bold',
-                  borderRadius: '8px', border: 'none',
-                  cursor: 'not-allowed', background: '#ccc', color: '#888',
-                }}
-              >
-                🎬 영상 생성
-              </button>
-            </div>
-
-            {imgMessages.length > 0 && (
-              <div style={{
-                marginTop: '16px', padding: '12px 16px', borderRadius: '8px',
-                background: imgStatus === 'error' ? '#FEF2F2' : '#F0FDF4',
-                border: `1px solid ${imgStatus === 'error' ? '#FCA5A5' : '#86EFAC'}`,
-                fontSize: '14px', lineHeight: '1.8',
-              }}>
-                {imgMessages.map((msg, i) => <div key={i}>{msg}</div>)}
-              </div>
-            )}
-
-            {imgResults.length > 0 && (
-              <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {imgResults.map((r, i) => (
-                  <span key={i} title={r.prompt_preview} style={{
-                    padding: '4px 10px', borderRadius: '20px', fontSize: '13px',
-                    background: r.status === '✅' ? '#DCFCE7' : '#FEE2E2',
-                    color:      r.status === '✅' ? '#166534' : '#991B1B',
-                    border:     `1px solid ${r.status === '✅' ? '#86EFAC' : '#FCA5A5'}`,
-                  }}>
-                    {r.scene} {r.status}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
@@ -1855,6 +1787,61 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
             {saveMsg && (
               <div style={{ padding: "10px 14px", borderRadius: 10, background: saveMsg.startsWith("✅") ? "rgba(74,170,74,0.12)" : saveMsg.startsWith("❌") ? "rgba(220,60,60,0.12)" : "rgba(255,180,0,0.08)", border: `1px solid ${saveMsg.startsWith("✅") ? "rgba(74,170,74,0.35)" : saveMsg.startsWith("❌") ? "rgba(220,60,60,0.35)" : "rgba(255,180,0,0.3)"}`, fontSize: 12, color: saveMsg.startsWith("✅") ? "#6adf6a" : saveMsg.startsWith("❌") ? "#f07070" : "#ffd060", whiteSpace: "pre-line", lineHeight: 1.6 }}>
                 {saveMsg}
+              </div>
+            )}
+
+            {/* ✏️ 저장완료 후 이미지/영상 생성 버튼 */}
+            {saveMsg && (
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px' }}>
+                <button
+                  onClick={handleImageGenFromSave}
+                  disabled={imgStatus === 'running'}
+                  style={{
+                    padding: '12px 28px', fontSize: '15px', fontWeight: 'bold',
+                    borderRadius: '8px', border: 'none',
+                    cursor: imgStatus === 'running' ? 'not-allowed' : 'pointer',
+                    background: imgStatus === 'running' ? '#888' : '#4F46E5',
+                    color: '#fff',
+                  }}
+                >
+                  {imgStatus === 'running' ? '⏳ 생성 중...' : '🎨 이미지 생성'}
+                </button>
+                <button
+                  title="준비 중입니다" disabled
+                  style={{
+                    padding: '12px 28px', fontSize: '15px', fontWeight: 'bold',
+                    borderRadius: '8px', border: 'none',
+                    cursor: 'not-allowed', background: '#ccc', color: '#888',
+                  }}
+                >
+                  🎬 영상 생성
+                </button>
+              </div>
+            )}
+
+            {imgMessages.length > 0 && saveMsg && (
+              <div style={{
+                marginTop: '12px', padding: '12px 16px', borderRadius: '8px',
+                background: imgStatus === 'error' ? '#FEF2F2' : '#F0FDF4',
+                border: `1px solid ${imgStatus === 'error' ? '#FCA5A5' : '#86EFAC'}`,
+                fontSize: '14px', lineHeight: '1.8',
+              }}>
+                {imgMessages.map((msg, i) => <div key={i}>{msg}</div>)}
+              </div>
+            )}
+
+            {imgResults.length > 0 && saveMsg && (
+              <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {imgResults.map((r, i) => (
+                  <span key={i} title={r.prompt_preview} style={{
+                    padding: '4px 10px', borderRadius: '20px', fontSize: '13px',
+                    background: r.status === '✅' ? '#DCFCE7' : '#FEE2E2',
+                    color: r.status === '✅' ? '#166534' : '#991B1B',
+                    border: `1px solid ${r.status === '✅' ? '#86EFAC' : '#FCA5A5'}`,
+                  }}>
+                    {r.scene} {r.status}
+                  </span>
+                ))}
               </div>
             )}
 
