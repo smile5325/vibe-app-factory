@@ -1,3 +1,14 @@
+#### v1.6.0 | 2026-04-24
+**변경 유형:** Major
+**수정 파일:** src/App.jsx, src/services/gemsApi.js (신규), D:\projects\gems-bridge\* (신규)
+**수정 내용:**
+  - Before: 파이프라인 버튼 1개 (🚀 7-Step 파이프라인 시작)
+  - After:  버튼 2개 분리 — 🎨 이미지 생성 (활성) + 🎬 영상 생성 (비활성/툴팁)
+  - 이미지 생성: XLSX 파일 선택 → gems-bridge 서버(localhost:8000) 전송 → Gems 분석 → 씬별 이미지 생성 → 결과 표시
+  - 브릿지 서버 신규: D:\projects\gems-bridge\ (main.py, setup.ps1, test_connection.py)
+**관련 에러:** 없음
+**배포 상태:** 🔧 로컬 (브릿지 서버는 로컬 전용)
+
 #### v1.5.0 | 2026-04-23
 **변경 유형:** Major
 **수정 파일:** src/App.jsx
