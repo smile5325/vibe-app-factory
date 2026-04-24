@@ -1645,8 +1645,18 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
               </div>
             </div>
 
-            {/* ✏️ 버튼 영역: 이미지 생성 + 영상 생성 */}
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '24px' }}>
+            {/* 1행: 🚀 파이프라인 시작 버튼 */}
+            <button onClick={runPipeline} disabled={!canStart} style={{
+              width: "100%", padding: "14px 0", borderRadius: 14, fontSize: 13, fontWeight: 700, letterSpacing: 1,
+              background: canStart ? "linear-gradient(135deg,rgba(120,80,255,0.9),rgba(168,85,247,0.9))" : "rgba(255,255,255,0.05)",
+              border: canStart ? "1px solid rgba(120,80,255,0.5)" : "1px solid rgba(255,255,255,0.08)",
+              color: canStart ? "#fff" : "#444", cursor: canStart ? "pointer" : "not-allowed", transition: "all 0.2s",
+            }}>
+              🚀 7-Step 파이프라인 시작
+            </button>
+
+            {/* 2행: 🎨 이미지 생성 + 🎬 영상 생성 버튼 */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '8px' }}>
               <input
                 ref={xlsxInputRef}
                 type="file"
@@ -1705,16 +1715,6 @@ STEP 5(썸네일)는 안:/컨셉:/영어 프롬프트:/한국어 설명:/텍스�
                 ))}
               </div>
             )}
-
-            {/* 기존 7-Step 파이프라인 버튼 (보존) */}
-            {/* <button onClick={runPipeline} disabled={!canStart} style={{
-              width: "100%", padding: "14px 0", borderRadius: 14, fontSize: 13, fontWeight: 700, letterSpacing: 1,
-              background: canStart ? "linear-gradient(135deg,rgba(120,80,255,0.9),rgba(168,85,247,0.9))" : "rgba(255,255,255,0.05)",
-              border: canStart ? "1px solid rgba(120,80,255,0.5)" : "1px solid rgba(255,255,255,0.08)",
-              color: canStart ? "#fff" : "#444", cursor: canStart ? "pointer" : "not-allowed", transition: "all 0.2s",
-            }}>
-              🚀 7-Step 파이프라인 시작
-            </button> */}
           </div>
         )}
 
