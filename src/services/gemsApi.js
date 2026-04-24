@@ -81,3 +81,55 @@ export async function getGemsList() {
   if (!res.ok) throw new Error("Gems 목록 조회 실패");
   return res.json();
 }
+
+export async function generateImagesByPath(xlsxPath, onProgress = () => {}) {
+  onProgress({ step: "checking", current: 0, total: 0, message: "브릿지 서버 확인 중..." });
+  const health = await checkBridgeHealth();
+  if (!health.ok) {
+    const msg = health.detail === "bridge_offline"
+      ? "⚠️ 브릿지 서버를 먼저 실행해주세요 (localhost:8000)"
+      : "⚠️ 브릿지 서버 응답 오류";
+    onProgress({ step: "error", current: 0, total: 0, message: msg });
+    throw new Error(msg);
+  }
+  if (!health.cookieValid) {
+    const msg = "⚠️ Gemini 쿠키를 갱신해주세요 (cookies.json)";
+    onProgress({ step: "error", current: 0, total: 0, message: msg });
+    throw new Error(msg);
+  }
+
+  onProgress({ step: "analyzing", current: 0, total: 0, message: "📊 Gems 분석 중... (프롬프트 분리 중)" });
+
+  let response;
+  try {
+    response = await fetch(`${BRIDGE_URL}/generate-images-by-path`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xlsx_path: xlsxPath }),
+      signal: AbortSignal.timeout(5 * 60 * 1000),
+    });
+  } catch (e) {
+    const msg = e.name === "TimeoutError" ? "⚠️ 요청 시간 초과" : `⚠️ 네트워크 오류: ${e.message}`;
+    onProgress({ step: "error", current: 0, total: 0, message: msg });
+    throw new Error(msg);
+  }
+
+  if (!response.ok) {
+    let detail = "알 수 없는 오류";
+    try { const errData = await response.json(); detail = errData.detail || detail; } catch {}
+    const msg = `⚠️ 서버 오류 (${response.status}): ${detail}`;
+    onProgress({ step: "error", current: 0, total: 0, message: msg });
+    throw new Error(msg);
+  }
+
+  const data = await response.json();
+  const { total = 0, success = 0, failed = 0 } = data;
+  onProgress({ step: "done", current: success, total, message: `✅ 완료: ${success}/${total}장 저장됨` });
+  if (data.save_dir) {
+    onProgress({ step: "saved", current: success, total, message: `📁 저장위치: ${data.save_dir}` });
+  }
+  if (failed > 0) {
+    onProgress({ step: "partial", current: success, total, message: `⚠️ ${failed}개 씬 생성 실패` });
+  }
+  return data;
+}
