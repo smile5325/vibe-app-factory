@@ -1051,6 +1051,18 @@ async function saveAllFiles(allOutput, config, setSaveMsg) {
       // ✏️ 날짜_주제 서브폴더 자동 생성
       const subDir = await catDir.getDirectoryHandle(subFolder, { create: true });
 
+      // 🗂️ 이미지 + 썸네일 폴더 자동 생성
+      const SUB_FOLDERS = ['이미지', '썸네일'];
+      for (const subName of SUB_FOLDERS) {
+        try {
+          const createdHandle = await subDir.getDirectoryHandle(subName, { create: true });
+          console.log(`✅ 폴더 핸들 획득 성공: ${subName}`, createdHandle);
+        } catch (e) {
+          console.error(`❌ 폴더 생성 실패: ${subName}`, e.name, e.message);
+        }
+      }
+      console.log('📁 서브폴더 생성 루프 완료');
+
       // ✏️ 파일 3개 저장
       const write = async (name, blob) => {
         const fh = await subDir.getFileHandle(name, { create: true });
